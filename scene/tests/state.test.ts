@@ -7,6 +7,8 @@ import {
   MAX_PERSISTED_SHADOWS,
   parseState
 } from '../src/shared/state.ts'
+import { createVoteArmingState, observeChoicePosition } from '../src/client/vote-arming.ts'
+import { updateDirectionalVisibility } from '../src/client/directional-visibility.ts'
 
 test('initial state is a valid empty park', () => {
   const state = createInitialState(new Date('2026-08-24T00:00:00.000Z'))
@@ -44,4 +46,47 @@ test('invalid choices and malformed stored state are rejected', () => {
   assert.equal(isChoice('LEFT'), false)
   assert.equal(parseState({ version: 1, questionId: 'missing-fields' }), null)
   assert.equal(parseState(null), null)
+})
+
+test('neutral spawn arms, then intentional A entry is accepted once', () => {
+  let arming = createVoteArmingState()
+  let result = observeChoicePosition(arming, false)
+  arming = result.state
+  assert.equal(result.enteredChoice, false)
+  result = observeChoicePosition(arming, true)
+  assert.equal(result.enteredChoice, true)
+  result = observeChoicePosition(result.state, true)
+  assert.equal(result.enteredChoice, false)
+})
+
+test('spawn inside A stays disarmed until neutral, then A entry arms once', () => {
+  let result = observeChoicePosition(createVoteArmingState(), true)
+  assert.equal(result.enteredChoice, false)
+  result = observeChoicePosition(result.state, true)
+  assert.equal(result.enteredChoice, false)
+  result = observeChoicePosition(result.state, false)
+  result = observeChoicePosition(result.state, true)
+  assert.equal(result.enteredChoice, true)
+})
+
+test('spawn inside A then neutral then B accepts B, not the spawn location', () => {
+  let result = observeChoicePosition(createVoteArmingState(), true)
+  result = observeChoicePosition(result.state, false)
+  result = observeChoicePosition(result.state, true)
+  assert.equal(result.enteredChoice, true)
+})
+
+test('resetting arming on reconnect prevents a repeat vote inside a zone', () => {
+  let result = observeChoicePosition(createVoteArmingState(), false)
+  result = observeChoicePosition(result.state, true)
+  assert.equal(result.enteredChoice, true)
+  result = observeChoicePosition(createVoteArmingState(), true)
+  assert.equal(result.enteredChoice, false)
+})
+
+test('front-only text hides after the rear threshold and stays stable in the hysteresis band', () => {
+  assert.equal(updateDirectionalVisibility(true, 7.29), true)
+  assert.equal(updateDirectionalVisibility(true, 7.3), false)
+  assert.equal(updateDirectionalVisibility(false, 7.0), false)
+  assert.equal(updateDirectionalVisibility(false, 6.7), true)
 })

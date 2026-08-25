@@ -2,7 +2,7 @@
 
 ## 2026-08-24: organizer access replaces purchase
 
-Do not buy a Decentraland NAME, LAND, MANA, World, hosting, assets, or any other product. Publishing remains an external dependency until the organizer grants World collaborator access.
+The Friendzone organizer has granted this project deployment permission to `TheShire.dcl.eth`. World access is CONFIRMED. A DCL NAME purchase and LAND purchase are NOT REQUIRED. No paid component is authorized; deployment itself remains deliberately unperformed until the verification gates close.
 
 ## 2026-08-24: asynchronous presence is the competitive lane
 

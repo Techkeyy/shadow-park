@@ -26,7 +26,7 @@ Evidence labels used here:
 | Judging | OFFICIAL-DOC CONFIRMED | 2026-09-05 through 2026-09-11 |
 | Winner reveal | OFFICIAL-DOC CONFIRMED | 2026-09-13 |
 | Exact submission cutoff time/timezone | UNKNOWN / NEEDS ORGANIZER CONFIRMATION | Public sources found specify September 4 but not an exact time/timezone |
-| World access offered by organizers | USER-PROVIDED ORGANIZER MESSAGE | Do not purchase a NAME, LAND, MANA, World, hosting, or assets |
+| World access | CONFIRMED — Friendzone organizer granted deployment permission to `TheShire.dcl.eth` | DCL NAME purchase: not required; LAND purchase: not required; no paid component authorized |
 
 ## Judging criteria
 

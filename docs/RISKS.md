@@ -3,14 +3,17 @@
 | Risk | Severity | Current evidence | Mitigation / next proof |
 | --- | --- | --- | --- |
 | Authoritative APIs require prerelease SDK | High | Exact `auth-server` build exists and local exports are present | Pin exact build; compile and run restart proof |
-| Storage survives server restart but redeploy behavior is unknown | High | Local restart passed twice; production service/redeploy not exercised | Test organizer-granted World redeploy |
-| No Creator Hub found | Medium | Standard locations checked | CLI path works; install Creator Hub only if mobile/publish workflow requires it |
-| Rendered interaction smoke test blocked by browser runtime error | High | Preview server works, browser control failed before tab | Use Creator Hub/Desktop Explorer or repair browser control; do not call runtime ready |
-| Real mobile device testing outstanding | High | Mobile docs found, no device exercise | Use `--mobile` QR with supported app early |
+| Storage survives server restart but redeploy behavior is unknown | High | Local restart passed twice; organizer World access is now confirmed, but production redeploy has not been exercised | Test `TheShire.dcl.eth` deployment only after the verification gates authorize it |
+| Creator Hub project initialization writes metadata | Low | Opening the imported `scene/` generated `main.crdt`, `.editor/project.json`, and `assets/scene/main.composite` | Keep only during mobile testing; remove only these exact generated targets afterward unless retained intentionally |
+| Persisted-state latency under the trusted CLI path | Medium | Clean port-8002 reconnect measured 807 ms request-to-render after clock-offset correction; the earlier roughly 60-second observation was contaminated | Keep the explicit loading state and recheck timing after material runtime changes |
+| Reconnect can auto-cast when the avatar starts inside a choice zone | Low | 8007 log shows a new `session_created` at 00:28:02.307 with persisted `total: 1` and no vote request, `vote_accepted`, or `shadow_created`; same/opposite duplicates were also rejected | Keep server-side UNARMED enforcement; recheck after material interaction changes |
+| Creator Hub 0.44.2 Windows authoritative preview incompatibility | High | A clean isolated retry served visual preview port 8000 but synchronously failed to spawn its Hammurabi child with `spawn EINVAL`; executable and npx script exist, and no child PID was created | Use the official CLI as the sole mobile preview stack; require matching realm plus positive hydration markers before every scan |
+| Question board rear text is mirrored | Closed | 8007 real-phone screenshots show readable 2D question UI, a text-free physical board, and a clean blank rear | Reopen only if a future build regresses; final design should remove QA marker/debug copy and lighten the overlay |
+| Real mobile device behavior | Medium | 8007 visual and vote-safety gates passed, including reconnect; two-client sync and the 1/5/10/20/30 Shadow sweep remain open | Run Gate 2 next, then the performance sweep |
 | Event cutoff timezone unknown | High | Date found, exact time absent | Ask organizer before final week and submit early |
-| Organizer World permission outstanding | High | Organizer offer supplied by user | Request World name and collaborator rights; never purchase |
+| Organizer World permission outstanding | Low | Resolved: Friendzone organizer granted access to `TheShire.dcl.eth`; deployment is intentionally not yet performed | Keep deployment paused until the verification gates close |
 | Guest identity may reset | Medium | `isGuest`/`userId` API exists, permanence unproven | Allow voting, limit promise, use current identity only |
 | Concurrent vote write races | High | SDK orders same-key writes, application transaction still needed | Single authoritative in-memory mutation queue plus durable snapshot |
 | Visual Shadow count can hurt mobile performance | High | Not tested | Primitive instancing/cap, test 1/5/10/20/30 on phone |
 | Official dependency audit findings | High | npm reports 14 findings including critical transitive `protobufjs`; proposed fix is incompatible SDK downgrade | Seek newer official authoritative build; do not force-fix or override major versions without runtime regression proof |
-| World name unknown during local dev | Low | Publishing not yet authorized | Use explicit development placeholder only; replace when organizer grants access |
+| World name unknown during local dev | Low | `TheShire.dcl.eth` is now confirmed for deployment | Keep local CLI realm and production World access separate |

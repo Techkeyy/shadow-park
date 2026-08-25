@@ -19,7 +19,9 @@ export type ParkState = {
   updatedAt: string
 }
 
-export const STATE_KEY = 'shadow-park/state/v1'
+// TEMPORARY isolated QA namespace for the 8007 mobile verification. Restore v1
+// before any production deployment; no production state is being reset.
+export const STATE_KEY = 'shadow-park/state/qa-8007'
 export const MAX_PERSISTED_SHADOWS = 30
 
 export function createInitialState(now = new Date()): ParkState {

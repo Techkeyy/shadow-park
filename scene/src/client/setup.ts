@@ -1,18 +1,54 @@
-import { engine, Entity, Material, MeshRenderer, TextShape, Transform } from '@dcl/sdk/ecs'
-import { Color4, Quaternion, Vector3 } from '@dcl/sdk/math'
+import {
+  ColliderLayer,
+  engine,
+  Entity,
+  Material,
+  MeshRenderer,
+  Transform,
+  TriggerArea,
+  triggerAreaEventsSystem
+} from '@dcl/sdk/ecs'
+import { Color4, Vector3 } from '@dcl/sdk/math'
 import { room } from '../shared/messages'
 import { Choice, ParkState, parseState, ShadowRecord } from '../shared/state'
+import { setupUi, UiVoteState, updateUi, updateUiFromState } from './ui'
 
-const LEFT_ZONE = { minX: 0.5, maxX: 7.25, minZ: 9.5, maxZ: 15.5 }
-const RIGHT_ZONE = { minX: 8.75, maxX: 15.5, minZ: 9.5, maxZ: 15.5 }
+const NEUTRAL_CENTER = Vector3.create(8, 0.15, 6)
+const NEUTRAL_SCALE = Vector3.create(6, 1.5, 4)
+const CHOICE_A_CENTER = Vector3.create(4, 0.15, 12.5)
+const CHOICE_B_CENTER = Vector3.create(12, 0.15, 12.5)
+const CHOICE_SCALE = Vector3.create(6.75, 2, 6)
+const CHOICES_START_Z = 8
+const clientStartedAtMs = Date.now()
 
 let parkState: ParkState | null = null
 let votePending = false
-let voteLocked = false
-let statusEntity = engine.RootEntity
-let tallyAEntity = engine.RootEntity
-let tallyBEntity = engine.RootEntity
+let voteState: UiVoteState = 'UNARMED'
+let sessionId = ''
+let sessionSequence = 0
+let requestSequence = 0
+const pendingStateRequests = new Map<string, { sentAtMs: number; sentAtIso: string }>()
 const renderedShadows: Entity[] = []
+
+type StateTiming = {
+  requestId: string
+  requestSentAtIso: string
+  serverSentAtIso: string
+  receivedAtMs: number
+  receivedAtIso: string
+}
+
+function trace(event: string, details: Record<string, unknown> = {}) {
+  console.log(
+    `[SHADOW_PARK_TIMING] ${JSON.stringify({
+      side: 'client',
+      event,
+      atIso: new Date().toISOString(),
+      elapsedMs: Date.now() - clientStartedAtMs,
+      ...details
+    })}`
+  )
+}
 
 function makeBox(position: Vector3, scale: Vector3, color: Color4) {
   const entity = engine.addEntity()
@@ -22,27 +58,73 @@ function makeBox(position: Vector3, scale: Vector3, color: Color4) {
   return entity
 }
 
-function makeText(value: string, position: Vector3, fontSize: number, color = Color4.White(), width = 12) {
-  const entity = engine.addEntity()
-  Transform.create(entity, { position, rotation: Quaternion.fromEulerDegrees(0, 180, 0) })
-  TextShape.create(entity, { text: value, fontSize, textColor: color, width, height: 4 })
-  return entity
-}
-
 function createStaticScene() {
   makeBox(Vector3.create(8, -0.15, 8), Vector3.create(16, 0.3, 16), Color4.create(0.025, 0.035, 0.07, 1))
   makeBox(Vector3.create(4, 0.02, 12.5), Vector3.create(6.5, 0.04, 6), Color4.create(0.12, 0.08, 0.24, 1))
   makeBox(Vector3.create(12, 0.02, 12.5), Vector3.create(6.5, 0.04, 6), Color4.create(0.03, 0.18, 0.24, 1))
-  makeBox(Vector3.create(8, 2.6, 7), Vector3.create(10.5, 4.8, 0.25), Color4.create(0.02, 0.025, 0.05, 1))
 
-  makeText('SHADOW PARK', Vector3.create(8, 4.2, 6.8), 3, Color4.create(0.7, 0.76, 1, 1))
-  makeText('Would you rather explore space\nor the deep ocean?', Vector3.create(8, 3.15, 6.8), 4, Color4.White(), 10)
-  makeText('LEFT  A\nEXPLORE SPACE', Vector3.create(4, 1.25, 9.25), 3, Color4.create(0.77, 0.58, 1, 1), 6)
-  makeText('RIGHT  B\nDEEP OCEAN', Vector3.create(12, 1.25, 9.25), 3, Color4.create(0.35, 0.86, 1, 1), 6)
+  // The board is intentionally a solid, text-free monument. Dynamic question,
+  // choice and status copy is rendered only through the official 2D UI.
+  makeBox(Vector3.create(8, 2.6, 7), Vector3.create(10.5, 4.8, 0.6), Color4.create(0.02, 0.025, 0.05, 1))
+  makeBox(Vector3.create(8, 2.6, 6.65), Vector3.create(9.5, 0.12, 0.12), Color4.create(0.18, 0.1, 0.42, 1))
+  makeBox(Vector3.create(8, 2.6, 7.35), Vector3.create(9.5, 0.12, 0.12), Color4.create(0.06, 0.28, 0.4, 1))
+  // Separate opaque rear surface: no reverse face can expose text because the
+  // board contains no world-space text at all.
+  makeBox(Vector3.create(8, 2.6, 7.48), Vector3.create(10.5, 4.8, 0.2), Color4.create(0.02, 0.025, 0.05, 1))
+}
 
-  tallyAEntity = makeText('0 SHADOWS', Vector3.create(4, 0.65, 9.25), 2, Color4.White(), 6)
-  tallyBEntity = makeText('0 SHADOWS', Vector3.create(12, 0.65, 9.25), 2, Color4.White(), 6)
-  statusEntity = makeText('Connecting to the park...', Vector3.create(8, 1.2, 3.8), 2, Color4.create(0.78, 0.82, 0.95, 1), 9)
+function createTriggerArea(position: Vector3, scale: Vector3, onEnter: () => void, onExit: () => void) {
+  const entity = engine.addEntity()
+  Transform.create(entity, { position, scale })
+  TriggerArea.setBox(entity, ColliderLayer.CL_PLAYER)
+  triggerAreaEventsSystem.onTriggerEnter(entity, (result) => {
+    if (result.trigger?.entity !== engine.PlayerEntity) return
+    onEnter()
+  })
+  triggerAreaEventsSystem.onTriggerExit(entity, (result) => {
+    if (result.trigger?.entity !== engine.PlayerEntity) return
+    onExit()
+  })
+  return entity
+}
+
+function createInteractionAreas() {
+  createTriggerArea(
+    NEUTRAL_CENTER,
+    NEUTRAL_SCALE,
+    () => {
+      trace('neutral_enter', { sessionId })
+      void room.send('neutralEntered', { sessionId })
+      if (voteState === 'UNARMED') setStatus('Neutral pad: leave toward A or B to arm your choice.')
+    },
+    () => {
+      const player = Transform.getOrNull(engine.PlayerEntity)
+      const towardChoices = Boolean(player && player.position.z > CHOICES_START_Z)
+      trace('neutral_exit', { sessionId, towardChoices })
+      void room.send('neutralExited', { sessionId, towardChoices })
+      if (voteState !== 'UNARMED' || !towardChoices) {
+        if (voteState === 'UNARMED' && !towardChoices) setStatus('Return to the neutral pad, then leave toward A or B.')
+        return
+      }
+      voteState = 'ARMED'
+      updateUi({ voteState })
+      trace('vote_armed', { sessionId, state: voteState })
+      setStatus('Choice armed — enter A or B to leave one Shadow.')
+    }
+  )
+
+  createTriggerArea(
+    CHOICE_A_CENTER,
+    CHOICE_SCALE,
+    () => handleChoiceTrigger('A'),
+    () => trace('choice_trigger_exit', { sessionId, choice: 'A' })
+  )
+  createTriggerArea(
+    CHOICE_B_CENTER,
+    CHOICE_SCALE,
+    () => handleChoiceTrigger('B'),
+    () => trace('choice_trigger_exit', { sessionId, choice: 'B' })
+  )
 }
 
 function shadowPosition(shadow: ShadowRecord): Vector3 {
@@ -86,45 +168,88 @@ function clearShadows() {
   }
 }
 
-function renderState(state: ParkState) {
+function renderState(state: ParkState, timing: StateTiming) {
+  const renderStartedAtMs = Date.now()
   parkState = state
-  TextShape.getMutable(tallyAEntity).text = `${state.countA} SHADOW${state.countA === 1 ? '' : 'S'}`
-  TextShape.getMutable(tallyBEntity).text = `${state.countB} SHADOW${state.countB === 1 ? '' : 'S'}`
+  updateUiFromState(state)
   clearShadows()
   for (const shadow of state.shadows) createShadow(shadow)
+  if (!votePending && voteState !== 'VOTED') setStatus('Walk to the neutral pad, then leave toward A or B to answer.')
+  const renderCompletedAtMs = Date.now()
+  const serverSentAtMs = Date.parse(timing.serverSentAtIso)
+  const timingPayload = {
+    requestId: timing.requestId,
+    requestSentAtIso: timing.requestSentAtIso,
+    serverSentAtIso: timing.serverSentAtIso,
+    clientReceivedAtIso: timing.receivedAtIso,
+    clientRenderAtIso: new Date(renderCompletedAtMs).toISOString(),
+    durationMs: renderCompletedAtMs - renderStartedAtMs,
+    clientReceiveToRenderMs: renderCompletedAtMs - timing.receivedAtMs,
+    serverToRenderMs: Number.isNaN(serverSentAtMs) ? 0 : renderCompletedAtMs - serverSentAtMs,
+    total: state.countA + state.countB,
+    shadowEntities: state.shadows.length * 3
+  }
+  trace('state_render_completed', timingPayload)
+  void room.send('timingReportV2', {
+    requestId: timingPayload.requestId,
+    requestSentAtIso: timingPayload.requestSentAtIso,
+    serverSentAtIso: timingPayload.serverSentAtIso,
+    clientReceivedAtIso: timingPayload.clientReceivedAtIso,
+    clientRenderAtIso: timingPayload.clientRenderAtIso,
+    clientReceiveToRenderMs: timingPayload.clientReceiveToRenderMs,
+    serverToRenderMs: timingPayload.serverToRenderMs
+  })
 }
 
 function setStatus(value: string) {
-  TextShape.getMutable(statusEntity).text = value
+  updateUi({ status: value })
 }
 
-function inside(position: Vector3, zone: typeof LEFT_ZONE) {
-  return position.x >= zone.minX && position.x <= zone.maxX && position.z >= zone.minZ && position.z <= zone.maxZ
-}
+function handleChoiceTrigger(choice: Choice) {
+  trace('choice_trigger_enter', { sessionId, choice, state: voteState })
+  if (votePending) return
 
-function sendVote(choice: Choice) {
-  if (votePending || voteLocked) return
+  trace('vote_intent_created', { sessionId, choice, state: voteState })
   votePending = true
-  setStatus('Leaving your Shadow...')
+  if (voteState === 'UNARMED') {
+    setStatus('That choice is not armed — return to the neutral pad first.')
+  } else if (voteState === 'ARMED') {
+    setStatus('Leaving your Shadow…')
+  } else {
+    setStatus('Checking your existing Shadow…')
+  }
   void room.send('castVote', { choice })
 }
 
-function choiceSystem() {
-  if (!parkState || votePending || voteLocked) return
-  const player = Transform.getOrNull(engine.PlayerEntity)
-  if (!player) return
-
-  if (inside(player.position, LEFT_ZONE)) sendVote('A')
-  else if (inside(player.position, RIGHT_ZONE)) sendVote('B')
-}
-
 export function setupClient() {
+  trace('client_setup_started')
+  setupUi()
   createStaticScene()
+  createInteractionAreas()
+  trace('static_scene_created', { worldText: false, triggerAreas: 3, ui: '2d' })
 
-  room.onMessage('stateChanged', ({ stateJson }) => {
+  room.onMessage('stateChanged', ({ stateJson, requestId, serverSentAtIso }) => {
+    const receivedAtMs = Date.now()
+    const receivedAtIso = new Date(receivedAtMs).toISOString()
+    const requestTiming = pendingStateRequests.get(requestId)
+    trace('state_message_received', {
+      requestId,
+      serverSentAtIso,
+      clientReceivedAtIso: receivedAtIso,
+      requestSentAtIso: requestTiming?.sentAtIso ?? '',
+      requestRoundTripMs: requestTiming === undefined ? null : receivedAtMs - requestTiming.sentAtMs
+    })
+    pendingStateRequests.delete(requestId)
     try {
       const nextState = parseState(JSON.parse(stateJson))
-      if (nextState) renderState(nextState)
+      if (nextState)
+        renderState(nextState, {
+          requestId,
+          requestSentAtIso: requestTiming?.sentAtIso ?? '',
+          serverSentAtIso,
+          receivedAtMs,
+          receivedAtIso
+        })
     } catch (error) {
       console.error('SHADOW PARK received invalid state', error)
     }
@@ -132,14 +257,38 @@ export function setupClient() {
 
   room.onMessage('voteResult', ({ accepted, message }) => {
     votePending = false
-    voteLocked = accepted || message.includes('already')
+    if (accepted || message.includes('already')) {
+      voteState = 'VOTED'
+      updateUi({ voteState })
+    }
     setStatus(message)
   })
 
   room.onReady((ready) => {
-    setStatus(ready ? 'Walk left or right to answer' : 'Connecting to the park...')
-    if (ready) void room.send('requestState', {})
+    trace('room_ready_changed', { ready })
+    if (!ready) {
+      sessionId = ''
+      votePending = false
+      voteState = 'UNARMED'
+      updateUi({ voteState })
+      setStatus(parkState ? 'Reconnecting to the park…' : 'Calling back the Shadows…')
+      return
+    }
+
+    sessionId = `session-${Date.now()}-${sessionSequence++}`
+    votePending = false
+    voteState = 'UNARMED'
+    updateUi({ voteState, hydrated: Boolean(parkState) })
+    trace('session_created', { sessionId })
+    trace('initial_vote_state', { sessionId, state: voteState })
+    void room.send('sessionCreated', { sessionId })
+    if (!parkState) setStatus('Calling back the Shadows…')
+    const requestId = `initial-${Date.now()}-${requestSequence++}`
+    const sentAtMs = Date.now()
+    const sentAtIso = new Date(sentAtMs).toISOString()
+    pendingStateRequests.set(requestId, { sentAtMs, sentAtIso })
+    trace('state_request_sent', { requestId, requestSentAtIso: sentAtIso })
+    void room.send('requestState', { requestId })
   })
 
-  engine.addSystem(choiceSystem)
 }

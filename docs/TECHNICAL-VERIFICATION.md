@@ -1,6 +1,6 @@
 # Technical Verification Ledger
 
-Last updated: 2026-08-25.
+Last updated: 2026-08-30.
 
 ## Environment
 
@@ -119,9 +119,29 @@ The server sent the persisted `total: 2` state, and the client completed the sta
 
 After the measured chain, a later live tick found the reconnecting avatar inside Choice A and the existing choice system auto-cast A; the server logged a missing per-player vote key and then broadcast `total: 3`. That mutation occurred after the timing sample and was not part of the hydration result. It is recorded as a test-safety/runtime finding: future A/B sessions must begin outside both zones, or the interaction should be explicitly armed.
 
-## Gate 2: two-client synchronization — NOT RUN
+## Gate 2: rendered two-client observation — NOT VERIFIED
 
-Gate 1 passed on the trusted port-8002 realm. Gate 2 was not claimed because this machine has no installed Decentraland Desktop Explorer, and the supported browser-client control path was unavailable in the current desktop session. No second eligible first-party client was therefore connected to the same realm. A synthetic or mixed-realm client would not be valid evidence, so A/B propagation, duplicate protection, and concurrency remain open.
+The real rendered two-client observation remains unverified. The second physical phone is not available; Desktop Explorer was blocked by its external UnityTLS/version guard; and the hosted Bevy Web path stopped at the communications gate with HTTP 401. The authoritative fallback below is explicitly not presented as rendered-client evidence.
+
+## Gate 2: authoritative multi-client fallback — PASS WITH RENDERED-CLIENT LIMITATION
+
+To close the protocol/integration portion of Gate 2 without inventing a second rendered client, the actual production `setupServer()` was exercised through its real typed room-message and Storage boundaries with deterministic in-memory test doubles. No server, state-machine, or persistence logic was copied into the tests. The verified checkpoint remains commit `f40ae07e3c2dfc84576230cbc9698b41a7de50d8`, with annotated tag `mobile-functional-gate-pass` resolving to that commit; both exact pinned dependencies remain unchanged.
+
+| Check | Result | Evidence |
+| --- | --- | --- |
+| Initial state for identities A/B | PASS | Both received the same question, A=0, B=0, Shadows=0 snapshot |
+| Identity A valid neutral → armed → A flow | PASS | Authoritative A=1/B=0, one Shadow, shared `stateChanged` broadcast received by both clients |
+| Identity B valid neutral → armed → B flow | PASS | Authoritative A=1/B=1, two Shadows, shared broadcast received by both clients |
+| State convergence | PASS | A and B inboxes deep-equal after each accepted mutation |
+| Same-side duplicate protection | PASS | Repeated A and repeated B requests rejected with no state or Shadow change |
+| Opposite-side second vote | PASS | A→B and B→A requests rejected after `VOTED` |
+| Near-concurrent opposing votes | PASS | Three independent fresh-state runs; every run ended A=1/B=1 with two unique Shadows and no lost update |
+| Reconnect / late join | PASS | Reconnecting B and late-joining C requested and received the latest snapshot without mutation |
+| Broadcast evidence | PASS | Tests assert initial/targeted state sends and one shared broadcast per accepted mutation |
+
+The nine existing state tests plus one sequential integration test plus three independent concurrency runs produced **13 passing test cases**. This establishes authoritative multi-client behavior, duplicate safety, queue serialization, reconnect hydration, late-join synchronization, and broadcast delivery. It does not establish that two separate rendered clients display those updates simultaneously.
+
+**Gate 2 status: PASS WITH RENDERED-CLIENT LIMITATION.** Real single-device mobile rendering, persistence, and vote-safety remain verified; the only outstanding limitation is direct observation of two rendered clients on one realm. The 1/5/10/20/30 Shadow mobile performance sweep is now authorized to proceed, with rendered two-client evidence kept clearly labeled as unavailable.
 
 ## UX findings / visual bugs
 
@@ -139,8 +159,7 @@ Director-reviewed phone screenshots passed the 2D question UI, correct orientati
 
 ## Required remaining proofs
 
-- Open two independent client identities; cast on one and observe the broadcast/Shadow on the other.
-- Verify two-client synchronization on the same 8007 authoritative realm after the reconnect proof closes.
+- A two-rendered-client observation remains desirable but is not required for the authoritative fallback Gate 2 result; do not describe the current evidence as two-device rendered proof.
 - Verify guest participation and once-per-current-identity behavior.
 - Run the 1/5/10/20/30 mobile Shadow sweep only after the two-client gate closes.
 - Determine redeployment persistence from official service guarantees or an organizer-granted test World. Do not claim until exercised.

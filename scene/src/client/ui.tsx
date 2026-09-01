@@ -106,15 +106,15 @@ function helperPanel() {
   return (
     <UiEntity
       uiTransform={{
-        width: '40%',
+        width: '30%',
         positionType: 'absolute',
-        position: { top: '4%', left: '30%' },
-        padding: '6px 10px',
+        position: { top: '3%', left: '35%' },
+        padding: '4px 8px',
         borderRadius: 8,
         flexDirection: 'column',
         alignItems: 'center'
       }}
-      uiBackground={{ color: Color4.create(0.015, 0.02, 0.06, 0.62) }}
+      uiBackground={{ color: Color4.create(0.015, 0.02, 0.06, 0.48) }}
     >
       {!uiState.hydrated && <Label value="SHADOW PARK" color={shadowPurple} fontSize={18} textAlign="middle-center" />}
       {helperCopy()}

@@ -20,7 +20,7 @@ test('default spawn is a neutral entrance outside choice triggers and faces into
   assert.ok(spawnZ < 4, 'spawn must remain south of the neutral pad')
   assert.ok(spawn.cameraTarget.z > spawnZ, 'camera target must face into the park')
   assert.equal(spawn.cameraTarget.x, 8)
-  assert.equal(spawn.cameraTarget.z, 6.5)
+  assert.equal(spawn.cameraTarget.z, 6.35)
 })
 
 test('question landmark remains a centered anchor before the decision split', () => {

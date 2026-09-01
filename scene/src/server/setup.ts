@@ -1,10 +1,12 @@
 import { Storage } from '@dcl/sdk/server'
 import { room } from '../shared/messages'
-import { applyVote, createInitialState, isChoice, ParkState, parseState, STATE_KEY } from '../shared/state'
+import { applyVote, createInitialState, isChoice, ParkState, parseState, rotateQuestion, STATE_KEY, utcDateKey } from '../shared/state'
 
 let state: ParkState = createInitialState()
 let mutationQueue: Promise<void> = Promise.resolve()
 const activeVoters = new Set<string>()
+const activeResonators = new Set<string>()
+const recentVotes = new Map<string, { choice: 'A' | 'B'; atMs: number }>()
 type VoteSessionState = 'UNARMED' | 'ARMED' | 'VOTED'
 const sessionStates = new Map<string, VoteSessionState>()
 const serverStartedAtMs = Date.now()
@@ -50,7 +52,7 @@ async function handleVote(choiceValue: string, playerId: string) {
 
   if (sessionState === 'UNARMED') {
     trace('vote_rejected_unarmed', { playerId, choice: choiceValue })
-    await room.send('voteResult', { accepted: false, message: 'Return to the neutral pad before choosing A or B.' }, { to: [playerId] })
+    await room.send('voteResult', { accepted: false, message: 'Start from the center, then choose a side.' }, { to: [playerId] })
     return
   }
 
@@ -102,12 +104,67 @@ async function handleVote(choiceValue: string, playerId: string) {
 
     state = nextState
     sessionStates.set(playerId, 'VOTED')
+    const nowMs = Date.now()
+    const recent = [...recentVotes.entries()].find(([otherPlayerId, vote]) => otherPlayerId !== playerId && nowMs - vote.atMs <= 45_000)
+    recentVotes.set(playerId, { choice: choiceValue, atMs: nowMs })
     trace('vote_accepted', { playerId, choice: choiceValue, total: state.countA + state.countB })
     trace('shadow_created', { playerId, choice: choiceValue, shadowId: nextState.shadows[nextState.shadows.length - 1]?.id ?? '' })
-    await room.send('voteResult', { accepted: true, message: 'You left a Shadow behind.' }, { to: [playerId] })
+    await room.send('voteResult', { accepted: true, message: 'Your Shadow joined the park.' }, { to: [playerId] })
+    if (recent) {
+      const kind = recent[1].choice === choiceValue ? 'RESONATE' : 'DIVERGE'
+      trace('live_moment', { playerId, kind, choice: choiceValue, otherPlayerId: recent[0] })
+      await room.send('liveMoment', { kind, choice: choiceValue })
+    }
     await sendState()
   } finally {
     activeVoters.delete(playerId)
+  }
+}
+
+function resonanceKey(questionId: string, shadowId: string): string {
+  return `shadow-park/resonated/${questionId}/${shadowId}`
+}
+
+async function handleResonate(shadowId: string, playerId: string) {
+  const shadowIndex = state.shadows.findIndex((shadow) => shadow.id === shadowId)
+  trace('resonate_request_received', { playerId, shadowId, found: shadowIndex >= 0 })
+  if (shadowIndex < 0) {
+    await room.send('resonateResult', { accepted: false, message: 'That Shadow has faded from view.', shadowId }, { to: [playerId] })
+    return
+  }
+
+  const activeKey = `${playerId}:${shadowId}`
+  if (activeResonators.has(activeKey)) return
+  activeResonators.add(activeKey)
+  try {
+    const alreadyResonated = await Storage.player.get<boolean>(playerId, resonanceKey(state.questionId, shadowId), { fresh: true })
+    if (alreadyResonated) {
+      trace('resonate_rejected_duplicate', { playerId, shadowId })
+      await room.send('resonateResult', { accepted: false, message: 'You already resonated with this Shadow.', shadowId }, { to: [playerId] })
+      return
+    }
+
+    const previousState = state
+    const nextState: ParkState = {
+      ...state,
+      shadows: state.shadows.map((shadow, index) => (index === shadowIndex ? { ...shadow, resonances: shadow.resonances + 1 } : shadow)),
+      updatedAt: new Date().toISOString()
+    }
+    if (!(await Storage.set(STATE_KEY, nextState))) {
+      await room.send('resonateResult', { accepted: false, message: 'The park could not remember that resonance.', shadowId }, { to: [playerId] })
+      return
+    }
+    if (!(await Storage.player.set(playerId, resonanceKey(nextState.questionId, shadowId), true))) {
+      await Storage.set(STATE_KEY, previousState)
+      await room.send('resonateResult', { accepted: false, message: 'The park could not lock that resonance.', shadowId }, { to: [playerId] })
+      return
+    }
+    state = nextState
+    trace('resonate_accepted', { playerId, shadowId, resonances: nextState.shadows[shadowIndex].resonances })
+    await room.send('resonateResult', { accepted: true, message: 'The Shadow answered.', shadowId }, { to: [playerId] })
+    await sendState()
+  } finally {
+    activeResonators.delete(activeKey)
   }
 }
 
@@ -126,6 +183,10 @@ export async function setupServer() {
 
     if (stored) {
       state = stored
+      if (state.questionDate && state.questionDate !== utcDateKey(new Date())) {
+        const rotated = rotateQuestion(state)
+        if (rotated !== state && (await Storage.set(STATE_KEY, rotated))) state = rotated
+      }
       return
     }
 
@@ -172,6 +233,14 @@ export async function setupServer() {
     queueMutation(async () => {
       await hydrationPromise
       await handleVote(data.choice, context.from)
+    })
+  })
+
+  room.onMessage('resonate', (data, context) => {
+    if (!context?.from) return
+    queueMutation(async () => {
+      await hydrationPromise
+      await handleResonate(data.shadowId, context.from)
     })
   })
 

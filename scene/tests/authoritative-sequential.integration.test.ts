@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { setupServer } from '../src/server/setup.ts'
+import { createInitialState } from '../src/shared/state.ts'
 import { __room } from './fakes/network.ts'
 
-const question = 'Would you rather explore space or the deep ocean?'
+const question = createInitialState().question
 
 function statesFor(playerId: string) {
   return __room.inboxes
@@ -88,4 +89,23 @@ test('two identities traverse the authoritative server/message path and converge
   __room.dispatch('requestState', { requestId: 'late-c' }, 'client-c')
   await flushQueue()
   assert.deepEqual(latestState('client-c'), latestState('client-a'))
+
+  const resonatedShadowId = latestState('client-c').shadows[0].id
+  __room.dispatch('resonate', { shadowId: resonatedShadowId }, 'client-c')
+  await flushQueue()
+  assert.equal(__room.inboxes.get('client-c')?.at(-1)?.eventType, 'stateChanged')
+  assert.equal(latestState('client-c').shadows[0].resonances, 1)
+  const acceptedResonance = __room.inboxes
+    .get('client-c')
+    ?.find((message) => message.eventType === 'resonateResult' && message.data.accepted === true)
+  assert.ok(acceptedResonance)
+
+  const stateAfterResonance = JSON.stringify(latestState('client-c'))
+  __room.dispatch('resonate', { shadowId: resonatedShadowId }, 'client-c')
+  await flushQueue()
+  assert.equal(JSON.stringify(latestState('client-c')), stateAfterResonance)
+  const rejectedResonance = __room.inboxes
+    .get('client-c')
+    ?.find((message) => message.eventType === 'resonateResult' && message.data.accepted === false)
+  assert.ok(rejectedResonance)
 })

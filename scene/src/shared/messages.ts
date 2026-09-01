@@ -7,6 +7,7 @@ export const ShadowParkMessages = {
   neutralEntered: Schemas.Map({ sessionId: Schemas.String }),
   neutralExited: Schemas.Map({ sessionId: Schemas.String, towardChoices: Schemas.Boolean }),
   castVote: Schemas.Map({ choice: Schemas.String }),
+  resonate: Schemas.Map({ shadowId: Schemas.String }),
   stateChanged: Schemas.Map({
     stateJson: Schemas.String,
     requestId: Schemas.String,
@@ -29,7 +30,9 @@ export const ShadowParkMessages = {
     clientReceiveToRenderMs: Schemas.Number,
     serverToRenderMs: Schemas.Number
   }),
-  voteResult: Schemas.Map({ accepted: Schemas.Boolean, message: Schemas.String })
+  voteResult: Schemas.Map({ accepted: Schemas.Boolean, message: Schemas.String }),
+  resonateResult: Schemas.Map({ accepted: Schemas.Boolean, message: Schemas.String, shadowId: Schemas.String }),
+  liveMoment: Schemas.Map({ kind: Schemas.String, choice: Schemas.String })
 }
 
 export const room = registerMessages(ShadowParkMessages)

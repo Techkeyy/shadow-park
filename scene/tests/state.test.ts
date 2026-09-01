@@ -5,7 +5,10 @@ import {
   createInitialState,
   isChoice,
   MAX_PERSISTED_SHADOWS,
-  parseState
+  MAX_VISIBLE_SHADOWS,
+  parseState,
+  questionForDate,
+  rotateQuestion
 } from '../src/shared/state.ts'
 import { createVoteArmingState, observeChoicePosition } from '../src/client/vote-arming.ts'
 import { updateDirectionalVisibility } from '../src/client/directional-visibility.ts'
@@ -40,12 +43,32 @@ test('visible persisted Shadows are bounded while tallies continue growing', () 
   assert.equal(state.shadows[0].id, 'shadow-5')
 })
 
+test('production rendering budget is lower than the persisted history cap', () => {
+  assert.equal(MAX_VISIBLE_SHADOWS, 20)
+  assert.ok(MAX_VISIBLE_SHADOWS < MAX_PERSISTED_SHADOWS)
+})
+
 test('invalid choices and malformed stored state are rejected', () => {
   assert.equal(isChoice('A'), true)
   assert.equal(isChoice('B'), true)
   assert.equal(isChoice('LEFT'), false)
   assert.equal(parseState({ version: 1, questionId: 'missing-fields' }), null)
   assert.equal(parseState(null), null)
+})
+
+test('curated questions rotate deterministically and archive the prior result', () => {
+  const first = createInitialState(new Date('2026-08-24T00:00:00.000Z'))
+  const sameDay = rotateQuestion(first, new Date('2026-08-24T18:00:00.000Z'))
+  assert.equal(sameDay.questionId, first.questionId)
+
+  const next = rotateQuestion(first, new Date('2026-08-25T00:00:00.000Z'))
+  assert.equal(next.questionDate, '2026-08-25')
+  assert.equal(next.countA, 0)
+  assert.equal(next.countB, 0)
+  assert.deepEqual(next.shadows, [])
+  assert.equal(next.history.length, 1)
+  assert.equal(next.history[0].questionId, first.questionId)
+  assert.equal(next.questionId, questionForDate(new Date('2026-08-25T00:00:00.000Z')).questionId)
 })
 
 test('neutral spawn arms, then intentional A entry is accepted once', () => {

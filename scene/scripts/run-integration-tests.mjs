@@ -6,9 +6,8 @@ import { fileURLToPath } from 'node:url'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const entries = [
+  'tests/core1-pipeline.integration.test.ts',
   'tests/authoritative-sequential.integration.test.ts',
-  'tests/authoritative-concurrency.integration.test.ts',
-  'tests/authoritative-concurrency.integration.test.ts',
   'tests/authoritative-concurrency.integration.test.ts'
 ]
 
@@ -38,4 +37,7 @@ async function run(entry) {
   }
 }
 
-for (const entry of entries) await run(entry)
+for (const entry of entries) {
+  console.log('RUNNING_INTEGRATION', entry)
+  await run(entry)
+}

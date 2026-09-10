@@ -1,6 +1,6 @@
 # Technical Verification Ledger
 
-Last updated: 2026-08-30.
+Last updated: 2026-09-05.
 
 ## Environment
 
@@ -147,7 +147,13 @@ The nine existing state tests plus one sequential integration test plus three in
 
 The first attempted rear-face mitigation (an opaque slab placed behind the front `TextShape` labels) failed on the real mobile renderer. The 8007 real-phone review closed the defect: dynamic question/status/tally copy now uses official 2D UI, the physical board is text-free scenery, and the rear is clean/blank. Front question orientation and readability passed. Do not spend additional engineering time on mirrored text unless it regresses.
 
-The accepted QA/prototype overlay is intentionally temporary. Before final design, remove `MOBILE BUILD 8007-UI`, the `Vote state: ...` diagnostic, and other developer/debug copy, and reduce the overlay's screen coverage while preserving question readability.
+The accepted QA/prototype overlay was intentionally temporary. The production pass removes the mobile build marker, vote-state/debug copy, and orientation-QA wire message; the remaining top-center question hierarchy is compact and preserves question readability.
+
+## 2026-09-01 mobile Shadow performance sweep — technically complete
+
+The disposable QA copy was rebuilt with large, separated mobile-only population controls and served from a fresh port-8024 CLI/Hammurabi stack. The authoritative logs recorded successful deterministic state generation and client state-render timing for 5, 10, 20, and 30 Shadows. The first 5-Shadow setup included one accidental A vote before the control restored the exact five-Shadow population; no vote occurred after that reset or during the 10/20/30 levels. No crash or population-generation/state-application error was logged. The prior 1-Shadow result remains **EXCELLENT**.
+
+The logs do not expose FPS/frame-drop data, and the operator supplied completion confirmations without explicit EXCELLENT/GOOD/MARGINAL/FAIL labels for 5/10/20/30. Therefore this is a technically successful stress sweep, not fabricated quantitative performance proof. The conservative production cap is **20 visible Shadows**; 30 remains a QA stress ceiling pending stronger frame-time evidence.
 
 ## Vote safety / interaction arming
 
@@ -161,9 +167,40 @@ Director-reviewed phone screenshots passed the 2D question UI, correct orientati
 
 - A two-rendered-client observation remains desirable but is not required for the authoritative fallback Gate 2 result; do not describe the current evidence as two-device rendered proof.
 - Verify guest participation and once-per-current-identity behavior.
-- Run the 1/5/10/20/30 mobile Shadow sweep only after the two-client gate closes.
+- The 1/5/10/20/30 mobile Shadow sweep is complete on the disposable QA realm; run one fresh post-design mobile smoke check before deployment.
 - Determine redeployment persistence from official service guarantees or an organizer-granted test World. Do not claim until exercised.
 
 ## Dependency/security warning
 
 The exact authoritative dependency tree currently reports 14 npm audit findings: 2 low, 5 moderate, 6 high, and 1 critical. The critical advisory is transitive `protobufjs` in official SDK tooling/protocol/hash paths; other notable issues include `extract-zip`, old `esbuild`, and `ts-deepmerge`. npm's proposed fix is an incompatible downgrade to SDK 7.1.3, which removes the required authoritative path. No force-fix or major-version override was applied. This is an upstream/toolchain risk that needs a verified official SDK update or carefully scoped mitigation before submission.
+
+
+## 2026-09-05 production signage integration — PASS
+
+The rejected custom-GLB signage path is no longer active in the production presentation. Main question surfaces, A/B destination signs, and the Memory Garden plaque now use the exact pinned-SDK
+`MeshRenderer.setPlane` + `Material.setBasicMaterial` textured-plane pipeline validated by the pinned mobile control. Production textures are power-of-two 1024×1024 PNGs. The question landmark rear is a separate opaque physical slab; no production signage relies on TextShape or backface-culling behavior.
+
+Validation: `npm test` = 23/23 passing; `npm run build` and type checking passed; both pinned dependencies are unchanged. A fresh isolated CLI realm on port 8047 served the rebuilt scene. Real-phone checks all passed: main board readable, board rear blank/non-mirrored, A sign readable, and B sign readable.
+
+
+## 2026-09-05 bounded polish implementation
+
+After the production signage gate passed, the first bounded completion pass increased mobile signage contrast and hierarchy without changing plane geometry or UVs. It also added restrained garden pathways, lanterns, tree silhouettes, destination gateways, and softer translucent A/B Shadow silhouettes with halo accents. The authoritative voting, persistence, question rotation, interaction arming, Resonate, live feedback, and 20-visible-Shadow cap were not changed.
+
+The 23-test suite passes and the pinned SDK build/typecheck passes. Fresh isolated preview 8049 contains this bundle and is ready for the next normal-visitor mobile UAT; visual acceptance of this polish remains pending that UAT.
+
+
+## 2026-09-06 first-time visitor spatial correction
+
+The 8049 manual UAT found the board separating instruction from action: A/B destinations sat behind the question landmark. The bounded correction moves the question landmark to the rear backdrop at z=11.4, brings both A/B destination installations and their trigger volumes forward to z=8.2, tightens the neutral pad to z=4.1, and points the spawn camera at z=8.0. Shadows continue to derive placement from the same explicit A/B zone identities. The accepted signage pipeline, vote safety, persistence, question state, Resonate, live feedback, and SDK pins are unchanged. Automated spatial, unit, integration, build, and type checks pass; fresh mobile verification is pending on preview 8051.
+
+## 2026-09-06 8051 bounded composition cleanup
+
+The 8051 rendered review failed only its bounded composition checks: stacked board silhouette, readable sign backs, and incidental Shadow placement. The correction is presentation-only. Memory Garden is now spatially separated at the side pocket; A/B and Memory Garden signs use the proven `MeshRenderer.setPlane` + `Material.setBasicMaterial` front with an opaque body and oversized blank rear; and rendered Shadows use deterministic 6x5 side-group slots that stay beyond the destination plinths and off the vote routes.
+
+Validation after the correction: `npm test` = 24/24 passing (including the Memory Garden separation assertion), `npm run build` and type checking pass, and `npm run test:integration` passes. No authoritative state, persistence, duplicate protection, question, Resonate, or SDK pin changes were made. Fresh real-mobile verification is pending on isolated preview 8052.
+
+
+## 2026-09-06 8052 lateral composition correction
+
+The 8052 real-mobile review passed blank sign rears and open A/B routes, but failed spatial composition: Memory Garden remained attached to the main-board silhouette and Shadows were behind the A/B signs. The presentation-only correction moves Memory Garden to a compact west side pocket, adds a low-profile side path, and computes per-choice lateral Shadow positions beside each destination. Voting, persistence, duplicate protection, A/B mapping, signage front/rear implementation, question state, Resonate, and SDK pins are unchanged. Automated build and tests remain green; fresh mobile verification is pending on isolated preview 8053.

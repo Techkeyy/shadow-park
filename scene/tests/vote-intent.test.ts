@@ -1,8 +1,14 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { sendChoiceIntent } from '../src/client/vote-intent.ts'
+import {
+  sendChoiceIntent,
+  stateAfterAcceptedAnswer,
+  stateAfterNextQuestionReady,
+  stateAfterRecenter,
+  type VoteState
+} from '../src/client/vote-intent.ts'
 
-function sentChoices(voteState: 'UNARMED' | 'ARMED' | 'VOTED', votePending: boolean, choice: 'A' | 'B') {
+function sentChoices(voteState: VoteState, votePending: boolean, choice: 'A' | 'B') {
   const sent: string[] = []
   const decision = sendChoiceIntent(voteState, votePending, choice, (intent) => sent.push(intent))
   return { decision, sent }
@@ -43,9 +49,39 @@ test('pending trigger sends no second request', () => {
   assert.deepEqual(sent, [])
 })
 
-test('VOTED re-entry still sends one request for authoritative duplicate rejection', () => {
+test('non-armed transition states send zero requests while the client is moving to the next question', () => {
+  for (const state of ['ANSWERED', 'TRANSITIONING', 'CENTERED', 'VOTED'] as const) {
+    const { decision, sent } = sentChoices(state, false, 'A')
+    assert.equal(decision.send, false)
+    assert.equal(decision.reason, 'unarmed')
+    assert.deepEqual(sent, [])
+  }
+})
+
+test('accepted answer enters transition, recenter returns centered, and server-ready arms the next question', () => {
+  assert.equal(stateAfterAcceptedAnswer(false), 'ANSWERED')
+  assert.equal(stateAfterAcceptedAnswer(true), 'VOTED')
+  assert.equal(stateAfterRecenter(), 'CENTERED')
+  assert.equal(stateAfterNextQuestionReady(), 'ARMED')
+})
+
+test('duplicate or opposite re-entry never bypasses the client transition guard', () => {
   const { decision, sent } = sentChoices('VOTED', false, 'A')
-  assert.equal(decision.send, true)
-  assert.equal(decision.reason, 'already_voted')
-  assert.deepEqual(sent, ['A'])
+  assert.equal(decision.send, false)
+  assert.equal(decision.reason, 'unarmed')
+  assert.deepEqual(sent, [])
+})
+
+test('ten consecutive accepted answers keep the transition state bounded and re-arm the next question', () => {
+  let state: VoteState = 'ARMED'
+  for (let answer = 1; answer <= 10; answer += 1) {
+    const accepted = sentChoices(state, false, answer % 2 === 0 ? 'B' : 'A')
+    assert.equal(accepted.decision.send, true)
+    state = stateAfterAcceptedAnswer(false)
+    assert.equal(state, 'ANSWERED')
+    state = stateAfterRecenter()
+    assert.equal(state, 'CENTERED')
+    state = stateAfterNextQuestionReady()
+    assert.equal(state, 'ARMED')
+  }
 })

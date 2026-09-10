@@ -39,7 +39,7 @@
       "cameraTarget": {
         "x": 8,
         "y": 1.5,
-        "z": 6.35
+        "z": 8.0
       }
     }
   ],
@@ -50,5 +50,10 @@
   "authoritativeMultiplayer": true,
   "worldConfiguration": {
     "name": "shadow-park-dev.dcl.eth"
+  },
+  "metadata": {
+    "requiredPermissions": [
+      "ALLOW_TO_MOVE_PLAYER_INSIDE_SCENE"
+    ]
   }
 }

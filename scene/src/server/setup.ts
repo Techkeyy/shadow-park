@@ -1,14 +1,29 @@
 import { Storage } from '@dcl/sdk/server'
 import { room } from '../shared/messages'
-import { applyVote, createInitialState, isChoice, ParkState, parseState, rotateQuestion, STATE_KEY, utcDateKey } from '../shared/state'
+import {
+  applyQuizAnswer,
+  AvatarSnapshot,
+  createClientState,
+  createInitialState,
+  createRunForPlayer,
+  currentQuestionForRun,
+  isChoice,
+  ParkState,
+  parseState,
+  PlayerRun,
+  RUN_KEY_PREFIX,
+  STATE_KEY,
+  QUIZ_ID,
+  rotateQuestion,
+  utcDateKey
+} from '../shared/state'
 
 let state: ParkState = createInitialState()
 let mutationQueue: Promise<void> = Promise.resolve()
-const activeVoters = new Set<string>()
 const activeResonators = new Set<string>()
-const recentVotes = new Map<string, { choice: 'A' | 'B'; atMs: number }>()
-type VoteSessionState = 'UNARMED' | 'ARMED' | 'VOTED'
-const sessionStates = new Map<string, VoteSessionState>()
+const sessionStates = new Map<string, 'UNARMED' | 'ARMED' | 'TRANSITIONING'>()
+const playerRuns = new Map<string, PlayerRun>()
+const answeredInFlight = new Set<string>()
 const serverStartedAtMs = Date.now()
 let hydrationReadyAtIso = ''
 
@@ -24,20 +39,35 @@ function trace(event: string, details: Record<string, unknown> = {}) {
   )
 }
 
-function voterKey(questionId: string): string {
-  return `shadow-park/voted/${questionId}`
+async function loadRun(playerId: string): Promise<PlayerRun> {
+  const cached = playerRuns.get(playerId)
+  if (cached) return cached
+  const runKeys = [
+    `${RUN_KEY_PREFIX}${state.quizId ?? 'shadow-park-quiz-v1'}`,
+    `${RUN_KEY_PREFIX}${QUIZ_ID}`,
+    `${RUN_KEY_PREFIX}shadow-park-quiz-v1`
+  ].filter((key, index, keys) => keys.indexOf(key) === index)
+  let stored: PlayerRun | null | undefined
+  for (const key of runKeys) {
+    stored = await Storage.player.get<PlayerRun>(playerId, key, { fresh: true })
+    if (stored) break
+  }
+  const run = stored && Array.isArray(stored.questionIds) ? stored : createRunForPlayer(playerId)
+  playerRuns.set(playerId, run)
+  return run
 }
 
 async function sendState(to?: string, requestId = '') {
   const options = to ? { to: [to] } : undefined
   const startedAtMs = Date.now()
-  trace('state_send_started', { to: to ?? 'broadcast', requestId, total: state.countA + state.countB })
-  await room.send(
-    'stateChanged',
-    { stateJson: JSON.stringify(state), requestId, serverSentAtIso: new Date().toISOString() },
-    options
-  )
+  const snapshot = to ? createClientState(state, await loadRun(to)) : state
+  trace('state_send_started', { to: to ?? 'broadcast', requestId, total: state.countA + state.countB, completed: snapshot.run?.completed ?? false })
+  await room.send('stateChanged', { stateJson: JSON.stringify(snapshot), requestId, serverSentAtIso: new Date().toISOString() }, options)
   trace('state_send_completed', { to: to ?? 'broadcast', requestId, durationMs: Date.now() - startedAtMs })
+}
+
+async function sendGlobalState() {
+  await room.send('globalStateChanged', { stateJson: JSON.stringify(state), serverSentAtIso: new Date().toISOString() })
 }
 
 function queueMutation(work: () => Promise<void>) {
@@ -46,79 +76,130 @@ function queueMutation(work: () => Promise<void>) {
   })
 }
 
-async function handleVote(choiceValue: string, playerId: string) {
-  const sessionState = sessionStates.get(playerId) ?? 'UNARMED'
-  trace('vote_request_received', { playerId, choice: choiceValue, state: sessionState })
-
-  if (sessionState === 'UNARMED') {
-    trace('vote_rejected_unarmed', { playerId, choice: choiceValue })
-    await room.send('voteResult', { accepted: false, message: 'Start from the center, then choose a side.' }, { to: [playerId] })
-    return
-  }
-
-  if (sessionState === 'VOTED') {
-    trace('vote_rejected_duplicate', { playerId, choice: choiceValue, reason: 'session_already_voted' })
-    await room.send('voteResult', { accepted: false, message: 'Your Shadow is already here.' }, { to: [playerId] })
-    await sendState(playerId)
-    return
-  }
-
-  if (!isChoice(choiceValue)) {
-    await room.send('voteResult', { accepted: false, message: 'Choose A or B.' }, { to: [playerId] })
-    return
-  }
-
-  if (activeVoters.has(playerId)) {
-    trace('vote_rejected_duplicate', { playerId, choice: choiceValue, reason: 'request_in_flight' })
-    await room.send('voteResult', { accepted: false, message: 'Your Shadow is already here.' }, { to: [playerId] })
-    await sendState(playerId)
-    return
-  }
-
-  activeVoters.add(playerId)
+function parseAvatarSnapshot(value: string): AvatarSnapshot | undefined {
+  if (!value) return undefined
   try {
-    const alreadyVoted = await Storage.player.get<boolean>(playerId, voterKey(state.questionId), { fresh: true })
-    if (alreadyVoted) {
-      sessionStates.set(playerId, 'VOTED')
-      trace('vote_rejected_duplicate', { playerId, choice: choiceValue, reason: 'persistent_player_lock' })
-      await room.send('voteResult', { accepted: false, message: 'Your Shadow is already here.' }, { to: [playerId] })
+    const candidate = JSON.parse(value) as AvatarSnapshot
+    return candidate && typeof candidate === 'object' ? candidate : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function answerResultPayload(run: PlayerRun, fields: Record<string, unknown> = {}) {
+  return {
+    accepted: false,
+    questionId: String(fields.questionId ?? run.lastAnswer?.questionId ?? currentQuestionForRun(run)?.questionId ?? ''),
+    correct: false,
+    message: '',
+    correctAnswer: '',
+    score: run.score,
+    shadowLevel: run.shadowLevel,
+    completed: false,
+    nextQuestionId: currentQuestionForRun(run)?.questionId ?? '',
+    shadowScore: run.shadowScore,
+    currentStreak: run.currentStreak,
+    bestStreak: run.bestStreak,
+    shadowRank: run.shadowRank,
+    masterStars: run.masterStars,
+    milestoneBonus: 0,
+    chainLost: false,
+    shadowAwakened: false,
+    becameMaster: false,
+    masterStarAwarded: false,
+    houseRank: run.houseRank ?? 0,
+    ...fields
+  }
+}
+
+async function handleAnswer(questionId: string, choiceValue: string, playerId: string, avatarJson: string) {
+  const sessionState = sessionStates.get(playerId) ?? 'UNARMED'
+  trace('answer_request_received', { playerId, questionId, choice: choiceValue, state: sessionState })
+  if (sessionState !== 'ARMED') {
+    trace('answer_rejected_not_armed', { playerId, questionId, choice: choiceValue, state: sessionState })
+    const run = await loadRun(playerId)
+    await room.send('answerResult', answerResultPayload(run, { message: 'That answer is not ready yet.' }), { to: [playerId] })
+    return
+  }
+  if (!isChoice(choiceValue)) {
+    await room.send('answerResult', answerResultPayload(await loadRun(playerId), { message: 'Choose A or B.' }), { to: [playerId] })
+    return
+  }
+  const flightKey = `${playerId}:${questionId}`
+  if (answeredInFlight.has(flightKey)) return
+  answeredInFlight.add(flightKey)
+  try {
+    const run = await loadRun(playerId)
+    const question = currentQuestionForRun(run)
+    if (!question || question.questionId !== questionId || run.answeredQuestionIds.includes(questionId)) {
+      trace('answer_rejected_duplicate_or_stale', { playerId, questionId, expectedQuestionId: question?.questionId ?? '' })
+      await room.send('answerResult', answerResultPayload(run, { message: 'That question is already answered. Next question.' }), { to: [playerId] })
       await sendState(playerId)
       return
     }
-
     const previousState = state
-    const nextState = applyVote(state, choiceValue, `shadow-${Date.now()}-${state.countA + state.countB}`)
-    const stateStored = await Storage.set(STATE_KEY, nextState)
-
-    if (!stateStored) {
-      await room.send('voteResult', { accepted: false, message: 'The park could not remember that vote. Try again.' }, { to: [playerId] })
+    const avatar = parseAvatarSnapshot(avatarJson)
+    const result = applyQuizAnswer(state, run, choiceValue, playerId, new Date(), avatar)
+    if (!(await Storage.set(STATE_KEY, result.state))) {
+      await room.send('answerResult', answerResultPayload(run, { message: 'The park could not remember that answer. Try again.', nextQuestionId: question.questionId }), { to: [playerId] })
       return
     }
-
-    const playerStored = await Storage.player.set(playerId, voterKey(nextState.questionId), true)
-    if (!playerStored) {
+    const runKey = `${RUN_KEY_PREFIX}${state.quizId ?? 'shadow-park-quiz-v1'}`
+    if (!(await Storage.player.set(playerId, runKey, result.run))) {
       await Storage.set(STATE_KEY, previousState)
-      await room.send('voteResult', { accepted: false, message: 'The park could not lock that vote. Try again.' }, { to: [playerId] })
+      await room.send('answerResult', answerResultPayload(run, { message: 'The park could not lock that answer. Try again.', nextQuestionId: question.questionId }), { to: [playerId] })
       return
     }
-
-    state = nextState
-    sessionStates.set(playerId, 'VOTED')
-    const nowMs = Date.now()
-    const recent = [...recentVotes.entries()].find(([otherPlayerId, vote]) => otherPlayerId !== playerId && nowMs - vote.atMs <= 45_000)
-    recentVotes.set(playerId, { choice: choiceValue, atMs: nowMs })
-    trace('vote_accepted', { playerId, choice: choiceValue, total: state.countA + state.countB })
-    trace('shadow_created', { playerId, choice: choiceValue, shadowId: nextState.shadows[nextState.shadows.length - 1]?.id ?? '' })
-    await room.send('voteResult', { accepted: true, message: 'Your Shadow joined the park.' }, { to: [playerId] })
-    if (recent) {
-      const kind = recent[1].choice === choiceValue ? 'RESONATE' : 'DIVERGE'
-      trace('live_moment', { playerId, kind, choice: choiceValue, otherPlayerId: recent[0] })
-      await room.send('liveMoment', { kind, choice: choiceValue })
-    }
-    await sendState()
+    state = result.state
+    playerRuns.set(playerId, result.run)
+    // A new quiz question is ready as soon as the previous answer is
+    // accepted. The authoritative per-question run state remains the
+    // duplicate-safety boundary; center arming is no longer required.
+    sessionStates.set(playerId, 'TRANSITIONING')
+    const chainCopy = result.correct && result.run.currentStreak > 0 ? ` CHAIN x${result.run.currentStreak}.` : result.chainLost ? ' CHAIN LOST.' : ''
+    const milestoneCopy = result.milestoneBonus > 0 ? ` +${result.milestoneBonus} MILESTONE.` : ''
+    const message = result.correct
+      ? `CORRECT. +10 SHADOW SCORE.${milestoneCopy}${chainCopy}`
+      : `NOT THIS TIME. Correct answer: ${result.correctAnswer}.${chainCopy}`
+    trace('answer_accepted', { playerId, questionId, choice: choiceValue, correct: result.correct, score: result.run.score, shadowLevel: result.run.shadowLevel, rank: result.run.shadowRank, streak: result.run.currentStreak, becameMaster: result.becameMaster })
+    await room.send('answerResult', answerResultPayload(result.run, {
+      accepted: true,
+      questionId: question.questionId,
+      correct: result.correct,
+      message,
+      correctAnswer: result.correctAnswer,
+      nextQuestionId: result.nextQuestion?.questionId ?? '',
+      milestoneBonus: result.milestoneBonus,
+      chainLost: result.chainLost,
+      shadowAwakened: result.shadowAwakened,
+      becameMaster: result.becameMaster,
+      masterStarAwarded: result.masterStarAwarded,
+      houseRank: result.run.houseRank ?? 0
+    }), { to: [playerId] })
+    await sendState(playerId)
+    await sendGlobalState()
   } finally {
-    activeVoters.delete(playerId)
+    answeredInFlight.delete(flightKey)
   }
+}
+
+async function handleRestart(playerId: string) {
+  const currentRun = await loadRun(playerId)
+  if (!currentRun.completed) {
+    await room.send('restartResult', { accepted: false, message: 'Finish this run before starting another.' }, { to: [playerId] })
+    return
+  }
+  const nextRun = createRunForPlayer(playerId, new Date())
+  const runKey = `${RUN_KEY_PREFIX}${state.quizId ?? 'shadow-park-quiz-v1'}`
+  if (!(await Storage.player.set(playerId, runKey, nextRun))) {
+    await room.send('restartResult', { accepted: false, message: 'The park could not start a new run. Try again.' }, { to: [playerId] })
+    return
+  }
+  playerRuns.set(playerId, nextRun)
+  sessionStates.set(playerId, 'ARMED')
+  trace('run_restarted', { playerId, runId: nextRun.runId })
+  await room.send('restartResult', { accepted: true, message: 'A new run begins.' }, { to: [playerId] })
+  await sendState(playerId)
 }
 
 function resonanceKey(questionId: string, shadowId: string): string {
@@ -162,7 +243,8 @@ async function handleResonate(shadowId: string, playerId: string) {
     state = nextState
     trace('resonate_accepted', { playerId, shadowId, resonances: nextState.shadows[shadowIndex].resonances })
     await room.send('resonateResult', { accepted: true, message: 'The Shadow answered.', shadowId }, { to: [playerId] })
-    await sendState()
+    await sendState(playerId)
+    await sendGlobalState()
   } finally {
     activeResonators.delete(activeKey)
   }
@@ -182,7 +264,9 @@ export async function setupServer() {
     })
 
     if (stored) {
-      state = stored
+      const migrated = { ...stored, version: 3 as const, quizId: QUIZ_ID, shadows: stored.houseMasters ?? [] }
+      state = migrated
+      if (stored.version !== 3 || stored.quizId !== QUIZ_ID) await Storage.set(STATE_KEY, state)
       if (state.questionDate && state.questionDate !== utcDateKey(new Date())) {
         const rotated = rotateQuestion(state)
         if (rotated !== state && (await Storage.set(STATE_KEY, rotated))) state = rotated
@@ -198,25 +282,40 @@ export async function setupServer() {
 
   room.onMessage('sessionCreated', (data, context) => {
     if (!context?.from) return
-    sessionStates.set(context.from, 'UNARMED')
+    // The player is ready to answer from the normal spawn flow. Keep the
+    // server-side guard for malformed/late requests, while duplicate and
+    // stale-question checks remain authoritative in handleAnswer.
+    sessionStates.set(context.from, 'ARMED')
     trace('session_created', { playerId: context.from, sessionId: data.sessionId })
-    trace('initial_vote_state', { playerId: context.from, sessionId: data.sessionId, state: 'UNARMED' })
+    trace('initial_answer_state', { playerId: context.from, sessionId: data.sessionId, state: 'ARMED' })
   })
 
-  room.onMessage('neutralEntered', (data, context) => {
+  room.onMessage('readyForNextQuestion', (data, context) => {
     if (!context?.from) return
-    if (!sessionStates.has(context.from)) sessionStates.set(context.from, 'UNARMED')
-    trace('neutral_enter', { playerId: context.from, sessionId: data.sessionId, state: sessionStates.get(context.from) })
+    queueMutation(async () => {
+      await hydrationPromise
+      const playerId = context.from
+      const current = sessionStates.get(playerId) ?? 'UNARMED'
+      const run = await loadRun(playerId)
+      const question = currentQuestionForRun(run)
+      // A lost acknowledgement must be safely retryable for the same question.
+      const accepted = (current === 'TRANSITIONING' || current === 'ARMED') && !run.completed && question?.questionId === data.questionId
+      if (accepted) {
+        sessionStates.set(playerId, 'ARMED')
+        trace('next_question_ready', { playerId, sessionId: data.sessionId, questionId: data.questionId, state: 'ARMED' })
+      } else {
+        trace('next_question_ready_rejected', { playerId, sessionId: data.sessionId, questionId: data.questionId, expectedQuestionId: question?.questionId ?? '', state: current })
+      }
+      await room.send('nextQuestionReady', { accepted, questionId: accepted ? data.questionId : question?.questionId ?? '' }, { to: [playerId] })
+    })
   })
 
-  room.onMessage('neutralExited', (data, context) => {
+  room.onMessage('restartRun', (data, context) => {
     if (!context?.from) return
-    const current = sessionStates.get(context.from) ?? 'UNARMED'
-    trace('neutral_exit', { playerId: context.from, sessionId: data.sessionId, towardChoices: data.towardChoices, state: current })
-    if (current === 'UNARMED' && data.towardChoices) {
-      sessionStates.set(context.from, 'ARMED')
-      trace('vote_armed', { playerId: context.from, sessionId: data.sessionId, state: 'ARMED' })
-    }
+    queueMutation(async () => {
+      await hydrationPromise
+      await handleRestart(context.from)
+    })
   })
 
   room.onMessage('requestState', (data, context) => {
@@ -228,11 +327,11 @@ export async function setupServer() {
       .catch((error) => console.error('SHADOW PARK initial state request failed', error))
   })
 
-  room.onMessage('castVote', (data, context) => {
+  room.onMessage('answerQuestion', (data, context) => {
     if (!context?.from) return
     queueMutation(async () => {
       await hydrationPromise
-      await handleVote(data.choice, context.from)
+      await handleAnswer(data.questionId, data.choice, context.from, data.avatarJson)
     })
   })
 
@@ -276,10 +375,15 @@ export async function setupServer() {
   room.onMessage('timingReport', recordTimingReport)
   room.onMessage('timingReportV2', recordTimingReport)
 
+  room.onMessage('clientTrace', (data, context) => {
+    if (!context?.from) return
+    trace('client_trace', { playerId: context.from, event: data.event, details: data.details })
+  })
+
   await hydrationPromise
   hydrationReadyAtIso = new Date().toISOString()
   trace('hydration_ready', { total: state.countA + state.countB })
-  await sendState()
+  await sendGlobalState()
   trace('initial_broadcast_completed')
-  console.log(`SHADOW PARK server ready with ${state.countA + state.countB} persisted vote(s)`)
+  console.log(`SHADOW PARK server ready with quiz ${state.quizId ?? 'shadow-park-quiz-v1'} and ${state.shadows.length} historical Shadow(s)`)
 }

@@ -273,8 +273,59 @@ function createLandscaping() {
     sphere(Vector3.create(x, 1.65, z), Vector3.create(0.9, 1.05, 0.9), canopy)
     sphere(Vector3.create(x + 0.34, 1.92, z + 0.12), Vector3.create(0.48, 0.58, 0.48), Color4.create(canopy.r * 0.7, canopy.g * 0.7, canopy.b * 0.7, 1))
   }
+}
 
+function createHouseOfMastersPavilion() {
+  const center = Vector3.create(HOUSE_OF_MASTERS_ZONE.centerX, 0.05, HOUSE_OF_MASTERS_ZONE.centerZ)
+  const baseColor = Color4.create(0.02, 0.035, 0.07, 1)
+  const stoneColor = Color4.create(0.08, 0.06, 0.16, 1)
+  const goldTrim = Color4.create(0.65, 0.48, 0.15, 1)
+  const purpleGlow = Color4.create(0.55, 0.2, 0.65, 0.8)
 
+  // Foundation platform
+  box(center, Vector3.create(HOUSE_OF_MASTERS_ZONE.scaleX, 0.1, HOUSE_OF_MASTERS_ZONE.scaleZ), baseColor)
+  box(Vector3.create(center.x, 0.11, center.z), Vector3.create(HOUSE_OF_MASTERS_ZONE.scaleX - 0.4, 0.03, HOUSE_OF_MASTERS_ZONE.scaleZ - 0.4), stoneColor)
+
+  // Pavilion Pillars & Roof
+  const pillarHeight = 2.4
+  const pillarPositions = [
+    Vector3.create(center.x - 1.8, pillarHeight / 2 + 0.1, center.z - 1.4),
+    Vector3.create(center.x + 1.8, pillarHeight / 2 + 0.1, center.z - 1.4),
+    Vector3.create(center.x - 1.8, pillarHeight / 2 + 0.1, center.z + 1.4),
+    Vector3.create(center.x + 1.8, pillarHeight / 2 + 0.1, center.z + 1.4)
+  ]
+  for (const pos of pillarPositions) {
+    cylinder(pos, Vector3.create(0.24, pillarHeight, 0.24), stoneColor, 0.5, 0.45)
+  }
+
+  // Roof Slabs
+  box(Vector3.create(center.x, 2.55, center.z), Vector3.create(4.2, 0.18, 3.4), stoneColor)
+  box(Vector3.create(center.x, 2.68, center.z), Vector3.create(3.8, 0.12, 3.0), goldTrim)
+
+  // Glowing Entrance Threshold
+  const entranceThreshold = box(Vector3.create(center.x, 0.14, center.z - 1.45), Vector3.create(2.2, 0.04, 0.5), purpleGlow)
+  Material.setPbrMaterial(entranceThreshold, { albedoColor: purpleGlow, emissiveColor: purpleGlow, emissiveIntensity: 1.4, roughness: 0.8, metallic: 0 })
+
+  // Top 3 Master Pedestals inside the pavilion
+  const pedestalOffsets = [-1.1, 0, 1.1]
+  for (let i = 0; i < 3; i++) {
+    const pX = center.x + pedestalOffsets[i]
+    const pZ = center.z + 0.4
+    const height = i === 1 ? 0.42 : 0.3
+    cylinder(Vector3.create(pX, height / 2 + 0.1, pZ), Vector3.create(0.65, height, 0.65), stoneColor, 0.55, 0.5)
+    const crown = sphere(Vector3.create(pX, height + 0.22, pZ), Vector3.create(0.22, 0.22, 0.22), goldTrim)
+    Material.setPbrMaterial(crown, { albedoColor: goldTrim, emissiveColor: goldTrim, emissiveIntensity: 1.2, roughness: 0.4, metallic: 0.6 })
+  }
+
+  // House of Masters Facade Sign
+  texturedSign(
+    'assets/scene/signs/house-of-masters.png',
+    Vector3.create(center.x, 2.3, center.z - 1.48),
+    Vector3.create(2.4, 0.75, 1),
+    Vector3.create(2.65, 0.95, 0.2),
+    stoneColor,
+    Color4.create(0.015, 0.02, 0.04, 1)
+  )
 }
 
 export const PERSONAL_SHADOW_POSITION = Vector3.create(PERSONAL_SHADOW_LAYOUT.avatar.centerX, 0.12, PERSONAL_SHADOW_LAYOUT.avatar.centerZ)
@@ -292,6 +343,7 @@ export function createPresentationV2() {
   createQuestionLandmark()
   createDestination('A')
   createDestination('B')
+  createHouseOfMastersPavilion()
   // A small dedicated pedestal keeps the current player's Shadow visible from
   // the quiz plaza without placing it in either answer route.
   box(Vector3.create(PERSONAL_SHADOW_LAYOUT.platform.centerX, 0.06, PERSONAL_SHADOW_LAYOUT.platform.centerZ), Vector3.create(PERSONAL_SHADOW_LAYOUT.platform.width, 0.08, PERSONAL_SHADOW_LAYOUT.platform.depth), Color4.create(0.08, 0.045, 0.18, 1))

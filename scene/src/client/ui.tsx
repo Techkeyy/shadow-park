@@ -1,6 +1,6 @@
 import { Color4 } from '@dcl/sdk/math'
 import ReactEcs, { Label, ReactEcsRenderer, UiEntity } from '@dcl/sdk/react-ecs'
-import type { ParkState } from '../shared/state'
+import type { HouseMasterRecord, ParkState } from '../shared/state'
 import { rankProgressForCorrectCount } from './stage2-feedback'
 
 export type UiVoteState = 'UNARMED' | 'ARMED' | 'ANSWERED' | 'TRANSITIONING' | 'RECENTER_RECOVERY' | 'CENTERED' | 'VOTED'
@@ -41,6 +41,8 @@ type ParkUiState = {
   totalCompletions: number
   totalPlayers: number
   startupStage: string
+  houseMasters: HouseMasterRecord[]
+  housePanelVisible: boolean
 }
 
 const uiState: ParkUiState = {
@@ -78,7 +80,9 @@ const uiState: ParkUiState = {
   nextQuestionId: '',
   totalCompletions: 0,
   totalPlayers: 0,
-  startupStage: 'CONNECTING'
+  startupStage: 'CONNECTING',
+  houseMasters: [],
+  housePanelVisible: false
 }
 
 const shadowPurple = Color4.create(0.74, 0.62, 1, 1)
@@ -214,8 +218,68 @@ function helperPanel() {
   )
 }
 
+function houseOfMastersPanel() {
+  if (!uiState.housePanelVisible) return null
+  const masters = (uiState.houseMasters || []).slice(0, 20)
+  return (
+    <UiEntity
+      uiTransform={{
+        positionType: 'absolute',
+        position: { top: '12%', left: '16%' },
+        width: '68%',
+        padding: '14px 18px',
+        borderRadius: 12,
+        flexDirection: 'column',
+        alignItems: 'center'
+      }}
+      uiBackground={{ color: Color4.create(0.04, 0.02, 0.09, 0.92) }}
+    >
+      <Label value="HOUSE OF MASTERS" color={shadowPurple} fontSize={20} textAlign="middle-center" />
+      <Label value="THE SHADOWS REMEMBER" color={mutedText} fontSize={12} textAlign="middle-center" />
+      
+      {masters.length === 0 ? (
+        <UiEntity uiTransform={{ flexDirection: 'column', alignItems: 'center', margin: '16px 0' }}>
+          <Label value="NO MASTERS YET. BE THE FIRST." color={warmText} fontSize={15} textAlign="middle-center" />
+          <Label value="Reach 30 correct answers to etch your name in the House." color={paleText} fontSize={12} textAlign="middle-center" />
+        </UiEntity>
+      ) : (
+        <UiEntity uiTransform={{ flexDirection: 'column', width: '100%', margin: '10px 0 0' }}>
+          {masters.map((master, index) => {
+            const rankLabel = `#${index + 1}`
+            const name = master.displayName || master.playerId.slice(0, 8)
+            const starText = master.masterStars > 0 ? `★${master.masterStars}` : '★0'
+            return (
+              <UiEntity
+                key={master.id || master.playerId}
+                uiTransform={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  width: '100%',
+                  padding: '3px 8px',
+                  margin: '2px 0'
+                }}
+                uiBackground={{ color: Color4.create(0.08, 0.05, 0.15, 0.6) }}
+              >
+                <Label value={`${rankLabel}  ${name}`} color={paleText} fontSize={12} />
+                <Label value={`MASTER ${starText}  •  SCORE ${master.shadowScore}  •  CHAIN ${master.bestStreak}`} color={warmText} fontSize={12} />
+              </UiEntity>
+            )
+          })}
+        </UiEntity>
+      )}
+    </UiEntity>
+  )
+}
+
 function ShadowParkUi() {
-  return <UiEntity uiTransform={{ width: '100%', height: '100%', pointerFilter: 'none' }}>{progressionHud()}{helperPanel()}{rankUpPanel()}</UiEntity>
+  return (
+    <UiEntity uiTransform={{ width: '100%', height: '100%', pointerFilter: 'none' }}>
+      {progressionHud()}
+      {helperPanel()}
+      {rankUpPanel()}
+      {houseOfMastersPanel()}
+    </UiEntity>
+  )
 }
 
 export function setupUi() {
@@ -234,6 +298,7 @@ export function updateUiFromState(state: ParkState) {
     countA: state.countA,
     countB: state.countB,
     hydrated: true,
+    houseMasters: state.houseMasters ?? [],
     score: state.run?.score ?? uiState.score,
     shadowScore: state.run?.shadowScore ?? uiState.shadowScore,
     currentStreak: state.run?.currentStreak ?? uiState.currentStreak,

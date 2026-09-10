@@ -5,7 +5,7 @@ import { getPlayer } from '@dcl/sdk/players'
 import { movePlayerTo } from '~system/RestrictedActions'
 import { room } from '../shared/messages'
 import { AvatarSnapshot, Choice, CURATED_QUESTIONS, MAX_VISIBLE_SHADOWS, ParkState, parseState, ShadowRecord } from '../shared/state'
-import { choiceCaptureBounds, hallShadowGridForSlot, isInsideChoiceCapture, zoneForChoice } from '../shared/zones'
+import { choiceCaptureBounds, hallShadowGridForSlot, isInsideChoiceCapture, zoneForChoice, HOUSE_OF_MASTERS_ZONE } from '../shared/zones'
 import { setupUi, UiVoteState, updateUi, updateUiFromState } from './ui'
 import { runCriticalAnswerTransition } from './core-transition'
 import { recenterAndVerify } from './recenter'
@@ -904,7 +904,8 @@ export function setupClient() {
         countA: globalState.countA,
         countB: globalState.countB,
         totalPlayers: globalState.totalPlayers,
-        totalCompletions: globalState.totalCompletions
+        totalCompletions: globalState.totalCompletions,
+        houseMasters: globalState.houseMasters ?? []
       })
     } catch (error) {
       console.error('SHADOW PARK received invalid global state', error)
@@ -994,4 +995,15 @@ export function setupClient() {
     }
   }
   engine.addSystem(readyPollSystem)
+
+  createTriggerArea(
+    Vector3.create(HOUSE_OF_MASTERS_ZONE.centerX, 1.2, HOUSE_OF_MASTERS_ZONE.centerZ),
+    Vector3.create(HOUSE_OF_MASTERS_ZONE.scaleX, 2.5, HOUSE_OF_MASTERS_ZONE.scaleZ),
+    () => {
+      updateUi({ housePanelVisible: true })
+    },
+    () => {
+      updateUi({ housePanelVisible: false })
+    }
+  )
 }

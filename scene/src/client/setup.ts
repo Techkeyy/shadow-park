@@ -310,7 +310,7 @@ function renderState(state: ParkState, timing: StateTiming) {
       personalShadowPresentationPending = false
       try {
         trace('personal_shadow_presentation_started', { sessionId, shadowLevel })
-        const personalShadow = createPersonalShadowVisual(shadowLevel, avatar)
+        const personalShadow = createPersonalShadowVisual(shadowLevel, avatar, state.run?.lifetimeCorrect ?? 0)
         if (personalShadowAwakened) shadowPulseUntil.set(personalShadow.root, Date.now() + 1200)
         trace('personal_shadow_presentation_ready', { sessionId, shadowLevel })
       } catch (error) {

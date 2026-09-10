@@ -45,8 +45,8 @@ writeWav('shadow-correct.wav', 0.68, [
 ])
 
 writeWav('shadow-wrong.wav', 0.18, [
-  { start: 0, end: 0.09, frequency: 220, amplitude: 0.24 },
-  { start: 0.075, end: 0.17, frequency: 165, amplitude: 0.22 }
+  { start: 0, end: 0.09, frequency: 220, amplitude: 0.28 },
+  { start: 0.075, end: 0.17, frequency: 165, amplitude: 0.26 }
 ])
 
 writeWav('shadow-rank.wav', 0.42, [

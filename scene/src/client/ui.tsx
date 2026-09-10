@@ -207,7 +207,6 @@ function helperPanel() {
       {showLoading && <Label value="SHADOW PARK" color={shadowPurple} fontSize={16} textAlign="middle-center" />}
       {helperCopy()}
       {resultCopy()}
-      {uiState.hydrated && !showResult && <Label value={`SHADOW SCORE ${uiState.shadowScore}`} color={paleText} fontSize={13} textAlign="middle-center" />}
       {feedback}
     </UiEntity>
   )

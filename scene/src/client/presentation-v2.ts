@@ -18,14 +18,17 @@ import {
   ENERGY_TRAIL_CAPACITY,
   createBoundedPool,
   createSingleton,
-  energyArcPoint
+  energyArcPoint,
+  shadowBaselineScaleForCorrectCount
 } from './stage2-feedback'
 
 // Production signage uses the pinned SDK's proven plane + Basic textured-material path.
 // The old custom GLB panels remain as historical artifacts, but are not referenced by the live presentation.
 const BOARD_PANEL_TEXTURES = CURATED_QUESTIONS.map((_, index) => 'assets/scene/signs/board-question-' + (index + 1) + '.png')
-const choiceTexturePath = (choice: Choice, index: number) =>
-  'assets/scene/signs/choice-' + choice.toLowerCase() + '-' + String(index + 1).padStart(2, '0') + '.png'
+const choiceTexturePath = (panelChoice: Choice, index: number, contentChoice: Choice = panelChoice) => {
+  const suffix = panelChoice === contentChoice ? '' : '-from-' + contentChoice.toLowerCase()
+  return 'assets/scene/signs/choice-' + panelChoice.toLowerCase() + '-' + String(index + 1).padStart(2, '0') + suffix + '.png'
+}
 
 const QUESTION_CENTER = Vector3.create(QUESTION_LANDMARK.centerX, 3.15, QUESTION_LANDMARK.centerZ)
 const QUESTION_BODY_DEPTH = 1.1
@@ -39,12 +42,14 @@ const choicePadEntities: Record<Choice, Entity[]> = { A: [], B: [] }
 const choicePadBaseScales = new Map<Entity, Vector3>()
 const choicePadPulseUntil = new Map<Choice, number>()
 const choicePadFlashUntil = new Map<Choice, number>()
+const choicePadFlashRings: Record<Choice, Entity[]> = { A: [], B: [] }
 
 const renderedShadowEntities: Entity[] = []
 const personalShadowRoot = createSingleton<Entity>()
 let energyFlight: { entity: Entity; trails: Entity[]; from: Vector3; to: Vector3; startedAt: number; durationMs: number; impactScale: number } | null = null
 let pendingPersonalShadowPulse = false
 const shadowImpactByRoot = new Map<Entity, { startedAt: number; durationMs: number; maxScale: number }>()
+const shadowBaseScaleByRoot = new Map<Entity, number>()
 let personalShadowImpactRing: Entity | null = null
 let personalShadowImpactGlow: Entity | null = null
 const ENERGY_POOL_CAPACITY = 2
@@ -204,6 +209,20 @@ function createDestination(choice: Choice) {
   choicePadEntities[choice] = [pad, padGlow]
   choicePadBaseScales.set(pad, Vector3.create(zone.scaleX - 0.18, 0.08, zone.scaleZ - 0.18))
   choicePadBaseScales.set(padGlow, Vector3.create(zone.scaleX - 0.48, 0.025, zone.scaleZ - 0.48))
+  const ringColor = Color4.create(accent.r, accent.g, accent.b, 0.92)
+  const ringScale = Vector3.create(zone.scaleX - 0.26, 0.028, 0.06)
+  const ringParts = [
+    box(Vector3.create(x, 0.215, z - (zone.scaleZ - 0.26) / 2), ringScale, ringColor),
+    box(Vector3.create(x, 0.215, z + (zone.scaleZ - 0.26) / 2), ringScale, ringColor),
+    box(Vector3.create(x - (zone.scaleX - 0.26) / 2, 0.215, z), Vector3.create(0.06, 0.028, zone.scaleZ - 0.26), ringColor),
+    box(Vector3.create(x + (zone.scaleX - 0.26) / 2, 0.215, z), Vector3.create(0.06, 0.028, zone.scaleZ - 0.26), ringColor)
+  ]
+  for (const ringPart of ringParts) {
+    Material.setPbrMaterial(ringPart, { albedoColor: ringColor, emissiveColor: accent, emissiveIntensity: 2.4, transparencyMode: 2, roughness: 0.5, metallic: 0 })
+    VisibilityComponent.create(ringPart, { visible: false })
+    choicePadBaseScales.set(ringPart, Transform.getOrNull(ringPart)?.scale ?? Vector3.create(1, 1, 1))
+  }
+  choicePadFlashRings[choice] = ringParts
   const signFrame = Color4.create(0.12, 0.14, 0.24, 1)
   // The sign labels the destination from the rear edge; the pad is a full
   // 1.55m in front of it so the player clearly steps onto the answer affordance.
@@ -337,6 +356,8 @@ export function createPresentationV2() {
   choicePadBaseScales.clear()
   choicePadPulseUntil.clear()
   choicePadFlashUntil.clear()
+  choicePadFlashRings.A = []
+  choicePadFlashRings.B = []
   const world = Color4.create(0.012, 0.018, 0.05, 1)
   const plaza = Color4.create(0.028, 0.045, 0.1, 1)
   box(Vector3.create(8, -0.18, 8), Vector3.create(16, 0.36, 16), world)
@@ -344,20 +365,11 @@ export function createPresentationV2() {
   createQuestionLandmark()
   createDestination('A')
   createDestination('B')
-  createHouseOfMasters()
   // A small dedicated pedestal keeps the current player's Shadow visible from
   // the quiz plaza without placing it in either answer route.
   box(Vector3.create(PERSONAL_SHADOW_LAYOUT.platform.centerX, 0.06, PERSONAL_SHADOW_LAYOUT.platform.centerZ), Vector3.create(PERSONAL_SHADOW_LAYOUT.platform.width, 0.08, PERSONAL_SHADOW_LAYOUT.platform.depth), Color4.create(0.08, 0.045, 0.18, 1))
   const personalPedestalGlow = cylinder(Vector3.create(PERSONAL_SHADOW_LAYOUT.platform.centerX, 0.25, PERSONAL_SHADOW_LAYOUT.platform.centerZ), Vector3.create(0.78, 0.35, 0.78), Color4.create(0.42, 0.16, 0.48, 1), 0.62, 0.5)
   Material.setPbrMaterial(personalPedestalGlow, { albedoColor: Color4.create(0.42, 0.16, 0.48, 1), emissiveColor: Color4.create(0.55, 0.2, 0.65, 1), emissiveIntensity: 1.2, roughness: 0.72, metallic: 0 })
-  texturedSign(
-    'assets/scene/signs/your-shadow.png',
-    Vector3.create(PERSONAL_SHADOW_LAYOUT.board.centerX, 0.9, PERSONAL_SHADOW_LAYOUT.board.frontZ),
-    Vector3.create(PERSONAL_SHADOW_LAYOUT.board.panelWidth, PERSONAL_SHADOW_LAYOUT.board.panelHeight, 1),
-    Vector3.create(PERSONAL_SHADOW_LAYOUT.board.bodyWidth, 0.58, PERSONAL_SHADOW_LAYOUT.board.bodyDepth),
-    Color4.create(0.12, 0.1, 0.22, 1),
-    Color4.create(0.018, 0.024, 0.055, 1)
-  )
   createLandscaping()
 
   const audioEntity = engine.addEntity()
@@ -470,11 +482,14 @@ export function updateQuestionSurface(state: ParkState) {
   Material.setBasicMaterial(questionSurface, {
     texture: Material.Texture.Common({ src: BOARD_PANEL_TEXTURES[activeIndex] ?? BOARD_PANEL_TEXTURES[0] })
   })
-  for (const choice of ['A', 'B'] as Choice[]) {
-    const surface = choiceSurfaces[choice]
+  const canonical = activeIndex >= 0 && activeIndex < QUIZ_QUESTIONS.length ? QUIZ_QUESTIONS[activeIndex] : undefined
+  for (const panelChoice of ['A', 'B'] as Choice[]) {
+    const surface = choiceSurfaces[panelChoice]
     if (!surface) continue
+    const displayedText = panelChoice === 'A' ? state.choiceA : state.choiceB
+    const contentChoice: Choice = canonical && displayedText === canonical.answerB ? 'B' : 'A'
     Material.setBasicMaterial(surface, {
-      texture: Material.Texture.Common({ src: choiceTexturePath(choice, activeIndex) })
+      texture: Material.Texture.Common({ src: choiceTexturePath(panelChoice, activeIndex, contentChoice) })
     })
   }
 }
@@ -500,7 +515,7 @@ export function createShadowVisual(shadow: ShadowRecord, sideIndex = shadow.slot
   // Personal progression is intentionally brighter than the Hall gallery.
   // Historical visitors are cooler, dimmer, and have no permanent nameplate.
   const tint = isPersonal
-    ? Color4.create(1, 0.46, 0.86, 0.96)
+    ? Color4.create(0.78, 0.52, 1, 0.96)
     : shadow.choice === 'A'
       ? Color4.create(0.24, 0.28, 0.62, 0.34)
       : Color4.create(0.08, 0.38, 0.54, 0.34)
@@ -666,7 +681,7 @@ export function createShadowVisual(shadow: ShadowRecord, sideIndex = shadow.slot
   return { root, position }
 }
 
-export function createPersonalShadowVisual(shadowLevel: number, avatar?: AvatarSnapshot) {
+export function createPersonalShadowVisual(shadowLevel: number, avatar?: AvatarSnapshot, lifetimeCorrect = 0) {
   const root = personalShadowRoot.getOrCreate(() => engine.addEntity())
   const visual = createShadowVisual(
     {
@@ -682,6 +697,9 @@ export function createPersonalShadowVisual(shadowLevel: number, avatar?: AvatarS
     PERSONAL_SHADOW_POSITION,
     root
   )
+  const baselineScale = shadowBaselineScaleForCorrectCount(lifetimeCorrect)
+  shadowBaseScaleByRoot.set(visual.root, baselineScale)
+  Transform.getMutable(visual.root).scale = Vector3.create(baselineScale, baselineScale, baselineScale)
   ensurePersonalShadowImpactVisuals(visual.root)
   if (pendingPersonalShadowPulse) {
     pendingPersonalShadowPulse = false
@@ -699,6 +717,7 @@ export function clearShadowVisuals() {
   personalShadowImpactRing = null
   personalShadowImpactGlow = null
   shadowImpactByRoot.clear()
+  shadowBaseScaleByRoot.clear()
   shadowRootsById.clear()
   shadowMotion.clear()
   shadowPulseUntil.clear()
@@ -734,11 +753,13 @@ export function animateShadowVisuals(deltaTime: number) {
     const pulse = shadowPulseUntil.get(root)
     const impact = shadowImpactByRoot.get(root)
     transform.position.y = motion.baseY + Math.sin(deltaTime * 0 + now / 1000 * 1.35 + motion.phase) * 0.04
+    const baseScale = shadowBaseScaleByRoot.get(root) ?? 1
     if (impact) {
       const progress = Math.min(1, (now - impact.startedAt) / impact.durationMs)
       const envelope = progress < 0.28 ? progress / 0.28 : (1 - progress) / 0.72
       const surge = Math.max(0, envelope) * (impact.maxScale - 1)
-      transform.scale = Vector3.create(1 + surge, 1 + surge, 1 + surge)
+      const impactScale = baseScale * (1 + surge)
+      transform.scale = Vector3.create(impactScale, impactScale, impactScale)
       if (personalShadowImpactRing) {
         const ringScale = 0.72 + Math.max(0, envelope) * 0.85
         Transform.getMutable(personalShadowImpactRing).scale = Vector3.create(ringScale, 1, ringScale)
@@ -754,7 +775,8 @@ export function animateShadowVisuals(deltaTime: number) {
       }
     } else {
       const pulseStrength = pulse && pulse > now ? 0.06 : 0
-      transform.scale = Vector3.create(1 + pulseStrength, 1 + pulseStrength, 1 + pulseStrength)
+      const restingScale = baseScale * (1 + pulseStrength)
+      transform.scale = Vector3.create(restingScale, restingScale, restingScale)
     }
   }
   for (const choice of ['A', 'B'] as Choice[]) {
@@ -766,6 +788,12 @@ export function animateShadowVisuals(deltaTime: number) {
       const base = choicePadBaseScales.get(entity)
       if (!base) continue
       Transform.getMutable(entity).scale = Vector3.create(base.x * pulse * flashBoost, base.y * (flash ? 1.2 : 1), base.z * pulse * flashBoost)
+    }
+    for (const ring of choicePadFlashRings[choice]) {
+      VisibilityComponent.getMutable(ring).visible = flash
+      const base = choicePadBaseScales.get(ring)
+      if (!base) continue
+      Transform.getMutable(ring).scale = Vector3.create(base.x * (flash ? 1.08 : 1), base.y * (flash ? 1.25 : 1), base.z * (flash ? 1.08 : 1))
     }
   }
 }

@@ -114,3 +114,20 @@ export function rankProgressForCorrectCount(correctCount: number): RankProgress 
   const next = targets.find(([threshold]) => correctCount < threshold)
   return { current: Math.max(0, correctCount), target: next?.[0] ?? null, nextRank: next?.[1] ?? null }
 }
+
+export const SAFE_PERSONAL_SHADOW_MAX_SCALE = 1.3
+
+function interpolate(start: number, end: number, progress: number): number {
+  return start + (end - start) * Math.max(0, Math.min(1, progress))
+}
+
+/** Permanent body scale derived only from the authoritative lifetime-correct count. */
+export function shadowBaselineScaleForCorrectCount(correctCount: number): number {
+  const count = Math.max(0, Math.floor(correctCount))
+  if (count >= 30) return SAFE_PERSONAL_SHADOW_MAX_SCALE
+  if (count >= 18) return interpolate(1.16, 1.24, (count - 18) / 11)
+  if (count >= 10) return interpolate(1.07, 1.15, (count - 10) / 7)
+  if (count >= 5) return interpolate(0.99, 1.06, (count - 5) / 4)
+  if (count >= 1) return interpolate(0.93, 0.98, (count - 1) / 3)
+  return 0.92
+}

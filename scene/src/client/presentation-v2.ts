@@ -1,6 +1,7 @@
 import { AudioSource, AvatarShape, Entity, Material, MeshRenderer, Transform, VisibilityComponent, engine } from '@dcl/sdk/ecs'
 import { Color4, Quaternion, Vector3 } from '@dcl/sdk/math'
 import { AvatarSnapshot, Choice, CURATED_QUESTIONS, ParkState, QUIZ_QUESTIONS, ShadowRecord, personalShadowBaseScale, questionById } from '../shared/state'
+import { updateUi } from './ui'
 import {
   CHOICE_A_ZONE,
   CHOICE_B_ZONE,
@@ -432,10 +433,10 @@ export function triggerShadowEnergy(choice: Choice, rankUp = false) {
     VisibilityComponent.getMutable(trail).visible = true
   }
   energyDiagnostics.entityEnabled += 1
-  energyFlight = { entity, trails, from, to, startedAt: Date.now(), durationMs: ENERGY_FLIGHT_DURATION_MS, impactScale: rankUp ? 1.16 : 1.12 }
+  energyFlight = { entity, trails, from, to, startedAt: Date.now(), durationMs: ENERGY_FLIGHT_DURATION_MS, impactScale: rankUp ? 1.25 : 1.18 }
 }
 
-export function triggerPersonalShadowReaction(durationMs = 420, maxScale = 1.12) {
+export function triggerPersonalShadowReaction(durationMs = 600, maxScale = 1.18) {
   const root = personalShadowRoot.peek()
   if (root) {
     pendingPersonalShadowPulse = false
@@ -735,7 +736,7 @@ export function animateShadowVisuals(deltaTime: number) {
       energyDiagnostics.destinationReached += 1
       const impactScale = flight.impactScale
       releaseEnergyFlight()
-      triggerPersonalShadowReaction(impactScale > 1.15 ? 480 : 420, impactScale)
+      triggerPersonalShadowReaction(impactScale > 1.2 ? 650 : 580, impactScale)
     }
   }
   for (const [root, motion] of shadowMotion) {
@@ -762,6 +763,20 @@ export function animateShadowVisuals(deltaTime: number) {
         shadowImpactByRoot.delete(root)
         if (personalShadowImpactRing) VisibilityComponent.getMutable(personalShadowImpactRing).visible = false
         if (personalShadowImpactGlow) VisibilityComponent.getMutable(personalShadowImpactGlow).visible = false
+        if (isPersonal) {
+          updateUi({ shadowGrewActive: true })
+          // Settle cue for ~850ms
+          const cueTimeout = 850
+          let timer = 0
+          const settleSystem = (dt: number) => {
+            timer += dt * 1000
+            if (timer >= cueTimeout) {
+              updateUi({ shadowGrewActive: false })
+              engine.removeSystem(settleSystem)
+            }
+          }
+          engine.addSystem(settleSystem)
+        }
       }
     } else {
       const pulseStrength = pulse && pulse > now ? 0.06 : 0

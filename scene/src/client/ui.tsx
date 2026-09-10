@@ -43,6 +43,7 @@ type ParkUiState = {
   startupStage: string
   houseMasters: HouseMasterRecord[]
   housePanelVisible: boolean
+  shadowGrewActive: boolean
 }
 
 const uiState: ParkUiState = {
@@ -82,7 +83,8 @@ const uiState: ParkUiState = {
   totalPlayers: 0,
   startupStage: 'CONNECTING',
   houseMasters: [],
-  housePanelVisible: false
+  housePanelVisible: false,
+  shadowGrewActive: false
 }
 
 const shadowPurple = Color4.create(0.74, 0.62, 1, 1)
@@ -133,6 +135,7 @@ function resultCopy() {
     <UiEntity uiTransform={{ flexDirection: 'column', alignItems: 'center', margin: '8px 0 0', padding: '8px 12px' }}>
       <Label value={headline} color={uiState.becameMaster ? shadowPurple : correct ? shadowBlue : warmText} fontSize={26} textAlign="middle-center" />
       <Label value={scoreDelta} color={correct ? shadowBlue : mutedText} fontSize={16} textAlign="middle-center" />
+      {correct && <Label value="✦ SHADOW GREW" color={warmText} fontSize={14} textAlign="middle-center" />}
       {chainLine && <Label value={chainLine} color={warmText} fontSize={13} textAlign="middle-center" />}
       <Label value={`SHADOW SCORE ${uiState.shadowScore}`} color={paleText} fontSize={17} textAlign="middle-center" />
       <Label value={uiState.shadowRank} color={shadowPurple} fontSize={14} textAlign="middle-center" />
@@ -164,6 +167,7 @@ function progressionHud() {
       <Label value={`SHADOW SCORE ${uiState.shadowScore}`} color={paleText} fontSize={16} />
       <Label value={`CHAIN ${uiState.currentStreak}`} color={uiState.currentStreak >= 5 ? warmText : shadowBlue} fontSize={14} />
       <Label value={uiState.shadowRank} color={shadowPurple} fontSize={14} />
+      {uiState.shadowGrewActive && <Label value="✦ +SHADOW POWER" color={warmText} fontSize={12} />}
       <Label value={progressLine} color={mutedText} fontSize={11} />
       {uiState.bestStreak > 0 && <Label value={`BEST CHAIN ${uiState.bestStreak}`} color={mutedText} fontSize={11} />}
     </UiEntity>

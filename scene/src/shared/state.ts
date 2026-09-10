@@ -274,16 +274,22 @@ export function shadowLevelForCorrectCount(correctCount: number): number {
 
 export function personalShadowBaseScale(lifetimeCorrect: number): number {
   if (lifetimeCorrect <= 0) return 0.92
+  if (lifetimeCorrect <= 0) return 0.90
   if (lifetimeCorrect >= 30) return 1.30
   let scale = 0.92
+  let scale = 0.90
   if (lifetimeCorrect < 5) {
     scale = 0.93 + ((lifetimeCorrect - 1) / 3) * 0.05
+    scale = 0.95 + (lifetimeCorrect - 1) * 0.03
   } else if (lifetimeCorrect < 10) {
     scale = 0.99 + ((lifetimeCorrect - 5) / 4) * 0.07
+    scale = 1.07 + (lifetimeCorrect - 5) * 0.02
   } else if (lifetimeCorrect < 18) {
     scale = 1.07 + ((lifetimeCorrect - 10) / 7) * 0.08
+    scale = 1.17 + ((lifetimeCorrect - 10) / 8) * 0.06
   } else {
     scale = 1.16 + ((lifetimeCorrect - 18) / 11) * 0.08
+    scale = 1.23 + ((lifetimeCorrect - 18) / 12) * 0.07
   }
   return Math.round(scale * 10000) / 10000
 }

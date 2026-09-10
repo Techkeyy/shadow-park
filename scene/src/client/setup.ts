@@ -9,6 +9,7 @@ import { choiceCaptureBounds, hallShadowGridForSlot, isInsideChoiceCapture, zone
 import { setupUi, UiVoteState, updateUi, updateUiFromState } from './ui'
 import { runCriticalAnswerTransition } from './core-transition'
 import { recenterAndVerify } from './recenter'
+import { runNonBlockingPresentationSteps } from './stage2-feedback'
 import { sendChoiceIntent, stateAfterAcceptedAnswer, stateAfterNextQuestionReady, stateAfterRecenter } from './vote-intent'
 import {
   animateShadowVisuals,
@@ -17,6 +18,8 @@ import {
   createPersonalShadowVisual,
   createShadowVisual,
   pulseChoicePad,
+  queuePersonalShadowReaction,
+  triggerPersonalShadowReaction,
   triggerShadowEnergy,
   playMomentSound as playPresentationMomentSound,
   shadowPulseUntil,
@@ -595,6 +598,8 @@ function completeAnswerTransition(result: {
   becameMaster: boolean
   masterStarAwarded: boolean
   houseRank: number
+  previousRank: string
+  rankChanged: boolean
 }) {
   const questionId = result.questionId || lastAttemptedQuestionId || parkState?.run?.lastAnswer?.questionId || ''
   if (!result.accepted) {
@@ -634,18 +639,17 @@ function completeAnswerTransition(result: {
   })
 
   const presentation = () => {
-    try {
-      playMomentSound()
-    } catch (error) {
-      traceTransition('result_sound_failed', { sessionId, error: String(error) })
-    }
-    if (result.correct) {
-      try {
-        triggerShadowEnergy(lastAttemptedChoice ?? 'A')
-      } catch (error) {
-        traceTransition('result_energy_failed', { sessionId, error: String(error) })
-      }
-    }
+    const cue = result.becameMaster ? 'master' : result.rankChanged ? 'rank' : result.correct ? 'correct' : 'wrong'
+    runNonBlockingPresentationSteps(
+      [
+        { name: 'audio', run: () => playPresentationMomentSound(momentAudioEntity, cue) },
+        { name: 'energy', run: () => { if (result.correct) triggerShadowEnergy(lastAttemptedChoice ?? 'A') } },
+        { name: 'shadow_reaction', run: () => { if (result.correct) queuePersonalShadowReaction() } },
+        { name: 'rejection_flash', run: () => { if (!result.correct) pulseChoicePad(lastAttemptedChoice ?? 'A') } },
+        { name: 'rank_presentation', run: () => { if (result.rankChanged) triggerPersonalShadowReaction(1200) } }
+      ],
+      (failure) => traceTransition('presentation_step_failed', { sessionId, step: failure.name, error: String(failure.error) })
+    )
   }
 
   runCriticalAnswerTransition({
@@ -678,6 +682,10 @@ function completeAnswerTransition(result: {
       traceTransition('score_received', { sessionId, questionId, scoreBefore, scoreAfter: result.score, shadowScore: result.shadowScore })
       traceTransition('result_ui_set', { sessionId, questionId, correct: result.correct, feedback: result.message, nextQuestionId: result.nextQuestionId })
       setStatus(result.message)
+      if (result.rankChanged) {
+        updateUi({ rankUpMessage: result.shadowRank })
+        timers.setTimeout(() => updateUi({ rankUpMessage: '' }), 1800)
+      }
     },
     startRecenter: () => {
       if (result.nextQuestionId) {
@@ -761,7 +769,7 @@ export function setupClient() {
     setStatus(message)
   })
 
-  room.onMessage('answerResult', ({ accepted, questionId, correct, message, correctAnswer, score, shadowLevel, completed, nextQuestionId, shadowScore, currentStreak, bestStreak, shadowRank, masterStars, milestoneBonus, chainLost, shadowAwakened, becameMaster, masterStarAwarded, houseRank }) => {
+  room.onMessage('answerResult', ({ accepted, questionId, correct, message, correctAnswer, score, shadowLevel, completed, nextQuestionId, shadowScore, currentStreak, bestStreak, shadowRank, previousRank, rankChanged, masterStars, milestoneBonus, chainLost, shadowAwakened, becameMaster, masterStarAwarded, houseRank }) => {
     completeAnswerTransition({
       accepted,
       questionId,
@@ -782,7 +790,9 @@ export function setupClient() {
       shadowAwakened,
       becameMaster,
       masterStarAwarded,
-      houseRank
+      houseRank,
+      previousRank,
+      rankChanged
     })
   })
 

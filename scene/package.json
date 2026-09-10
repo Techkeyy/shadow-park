@@ -7,7 +7,7 @@
     "deploy": "sdk-commands deploy",
     "build": "sdk-commands build",
     "generate:textures": "node --experimental-strip-types scripts/generate-sign-textures.mjs",
-    "test": "node --experimental-strip-types --test tests/state.test.ts tests/zone-mapping.test.ts tests/vote-intent.test.ts tests/spawn-config.test.ts tests/core-transition.test.ts",
+    "test": "node --experimental-strip-types --test tests/state.test.ts tests/zone-mapping.test.ts tests/vote-intent.test.ts tests/spawn-config.test.ts tests/core-transition.test.ts tests/stage2.test.ts",
     "test:integration": "node scripts/run-integration-tests.mjs",
     "doctor": "node scripts/doctor.mjs",
     "upgrade-sdk": "npm install --save-dev @dcl/sdk@latest",

@@ -6,11 +6,13 @@ import {
   CHOICE_B_ZONE,
   CHOICE_SIGN_FRONT_OFFSET,
   HOUSE_OF_MASTERS_ZONE,
+  PERSONAL_SHADOW_LAYOUT,
   QUESTION_LANDMARK,
   SHADOW_GROUP_COLUMNS,
   SHADOW_GROUP_ROWS,
   zoneForChoice
 } from '../shared/zones'
+import { createBoundedPool, createSingleton } from './stage2-feedback'
 
 // Production signage uses the pinned SDK's proven plane + Basic textured-material path.
 // The old custom GLB panels remain as historical artifacts, but are not referenced by the live presentation.
@@ -31,12 +33,23 @@ const choicePadBaseScales = new Map<Entity, Vector3>()
 const choicePadPulseUntil = new Map<Choice, number>()
 
 const renderedShadowEntities: Entity[] = []
-let personalShadowRoot: Entity | null = null
-let energyEntity: Entity | null = null
-let energyFlight: { from: Vector3; to: Vector3; startedAt: number; durationMs: number } | null = null
+const personalShadowRoot = createSingleton<Entity>()
+let energyFlight: { entity: Entity; from: Vector3; to: Vector3; startedAt: number; durationMs: number } | null = null
+let pendingPersonalShadowPulse = false
+const ENERGY_POOL_CAPACITY = 2
 export const shadowRootsById = new Map<string, Entity>()
 export const shadowMotion = new Map<Entity, { baseY: number; phase: number }>()
 export const shadowPulseUntil = new Map<Entity, number>()
+
+export type PresentationAudioCue = 'select' | 'correct' | 'wrong' | 'rank' | 'master'
+
+export const AUDIO_CUE_URLS: Record<PresentationAudioCue, string> = {
+  select: 'assets/scene/shadow-chime.wav',
+  correct: 'assets/scene/shadow-chime.wav',
+  wrong: 'assets/scene/shadow-wrong.wav',
+  rank: 'assets/scene/shadow-rank.wav',
+  master: 'assets/scene/shadow-master.wav'
+}
 
 function warmShadowColor(choice: Choice) {
   return choice === 'A' ? Color4.create(0.96, 0.78, 0.38, 0.9) : Color4.create(0.45, 0.95, 0.96, 0.9)
@@ -65,6 +78,19 @@ function sphere(position: Vector3, scale: Vector3, color: Color4) {
   Material.setPbrMaterial(entity, { albedoColor: color, roughness: 0.9, metallic: 0 })
   return entity
 }
+
+const energyPool = createBoundedPool(ENERGY_POOL_CAPACITY, () => {
+  const entity = sphere(Vector3.create(0, -20, 0), Vector3.create(0.16, 0.16, 0.16), Color4.create(0.98, 0.86, 0.48, 1))
+  Material.setPbrMaterial(entity, {
+    albedoColor: Color4.create(1, 0.86, 0.45, 1),
+    emissiveColor: Color4.create(1, 0.7, 0.25, 1),
+    emissiveIntensity: 2.2,
+    roughness: 0.4,
+    metallic: 0
+  })
+  VisibilityComponent.getMutable(entity).visible = false
+  return entity
+})
 
 function texturedPlane(src: string, position: Vector3, scale: Vector3) {
   const entity = engine.addEntity()
@@ -249,7 +275,7 @@ function createLandscaping() {
 
 }
 
-export const PERSONAL_SHADOW_POSITION = Vector3.create(6.35, 0.12, 4.65)
+export const PERSONAL_SHADOW_POSITION = Vector3.create(PERSONAL_SHADOW_LAYOUT.avatar.centerX, 0.12, PERSONAL_SHADOW_LAYOUT.avatar.centerZ)
 
 export function createPresentationV2() {
   choicePadEntities.A = []
@@ -266,14 +292,14 @@ export function createPresentationV2() {
   createHouseOfMasters()
   // A small dedicated pedestal keeps the current player's Shadow visible from
   // the quiz plaza without placing it in either answer route.
-  box(Vector3.create(6.35, 0.06, 4.65), Vector3.create(1.65, 0.08, 1.35), Color4.create(0.08, 0.045, 0.18, 1))
-  const personalPedestalGlow = cylinder(Vector3.create(6.35, 0.25, 4.65), Vector3.create(0.78, 0.35, 0.78), Color4.create(0.42, 0.16, 0.48, 1), 0.62, 0.5)
+  box(Vector3.create(PERSONAL_SHADOW_LAYOUT.platform.centerX, 0.06, PERSONAL_SHADOW_LAYOUT.platform.centerZ), Vector3.create(PERSONAL_SHADOW_LAYOUT.platform.width, 0.08, PERSONAL_SHADOW_LAYOUT.platform.depth), Color4.create(0.08, 0.045, 0.18, 1))
+  const personalPedestalGlow = cylinder(Vector3.create(PERSONAL_SHADOW_LAYOUT.platform.centerX, 0.25, PERSONAL_SHADOW_LAYOUT.platform.centerZ), Vector3.create(0.78, 0.35, 0.78), Color4.create(0.42, 0.16, 0.48, 1), 0.62, 0.5)
   Material.setPbrMaterial(personalPedestalGlow, { albedoColor: Color4.create(0.42, 0.16, 0.48, 1), emissiveColor: Color4.create(0.55, 0.2, 0.65, 1), emissiveIntensity: 1.2, roughness: 0.72, metallic: 0 })
   texturedSign(
     'assets/scene/signs/your-shadow.png',
-    Vector3.create(6.35, 0.9, 4.18),
-    Vector3.create(1.5, 0.4, 1),
-    Vector3.create(1.68, 0.58, 0.28),
+    Vector3.create(PERSONAL_SHADOW_LAYOUT.board.centerX, 0.9, PERSONAL_SHADOW_LAYOUT.board.frontZ),
+    Vector3.create(PERSONAL_SHADOW_LAYOUT.board.panelWidth, PERSONAL_SHADOW_LAYOUT.board.panelHeight, 1),
+    Vector3.create(PERSONAL_SHADOW_LAYOUT.board.bodyWidth, 0.58, PERSONAL_SHADOW_LAYOUT.board.bodyDepth),
     Color4.create(0.12, 0.1, 0.22, 1),
     Color4.create(0.018, 0.024, 0.055, 1)
   )
@@ -292,20 +318,30 @@ export function createPresentationV2() {
 }
 
 export function triggerShadowEnergy(choice: Choice) {
-  if (!energyEntity) {
-    energyEntity = sphere(Vector3.create(8, 0.5, 5.5), Vector3.create(0.16, 0.16, 0.16), Color4.create(0.98, 0.86, 0.48, 1))
-    Material.setPbrMaterial(energyEntity, {
-      albedoColor: Color4.create(1, 0.86, 0.45, 1),
-      emissiveColor: Color4.create(1, 0.7, 0.25, 1),
-      emissiveIntensity: 2.2,
-      roughness: 0.4,
-      metallic: 0
-    })
+  if (energyFlight) {
+    VisibilityComponent.getMutable(energyFlight.entity).visible = false
+    energyPool.release(energyFlight.entity)
+    energyFlight = null
   }
+  const entity = energyPool.acquire()
+  if (!entity) return
   const pad = zoneForChoice(choice)
-  Transform.getMutable(energyEntity).position = Vector3.create(pad.centerX, 0.52, pad.centerZ)
-  VisibilityComponent.getMutable(energyEntity).visible = true
-  energyFlight = { from: Vector3.create(pad.centerX, 0.52, pad.centerZ), to: Vector3.create(PERSONAL_SHADOW_POSITION.x, 1.28, PERSONAL_SHADOW_POSITION.z), startedAt: Date.now(), durationMs: 720 }
+  Transform.getMutable(entity).position = Vector3.create(pad.centerX, 0.52, pad.centerZ)
+  Transform.getMutable(entity).scale = Vector3.create(1, 1, 1)
+  VisibilityComponent.getMutable(entity).visible = true
+  energyFlight = { entity, from: Vector3.create(pad.centerX, 0.52, pad.centerZ), to: Vector3.create(PERSONAL_SHADOW_POSITION.x, 1.28, PERSONAL_SHADOW_POSITION.z), startedAt: Date.now(), durationMs: 720 }
+}
+
+export function triggerPersonalShadowReaction(durationMs = 850) {
+  const root = personalShadowRoot.peek()
+  if (root) {
+    pendingPersonalShadowPulse = false
+    shadowPulseUntil.set(root, Date.now() + durationMs)
+  } else pendingPersonalShadowPulse = true
+}
+
+export function queuePersonalShadowReaction() {
+  pendingPersonalShadowPulse = true
 }
 
 export function updateQuestionSurface(state: ParkState) {
@@ -514,8 +550,8 @@ export function createShadowVisual(shadow: ShadowRecord, sideIndex = shadow.slot
 }
 
 export function createPersonalShadowVisual(shadowLevel: number, avatar?: AvatarSnapshot) {
-  if (!personalShadowRoot) personalShadowRoot = engine.addEntity()
-  return createShadowVisual(
+  const root = personalShadowRoot.getOrCreate(() => engine.addEntity())
+  const visual = createShadowVisual(
     {
       id: 'personal-shadow',
       choice: 'A',
@@ -527,8 +563,13 @@ export function createPersonalShadowVisual(shadowLevel: number, avatar?: AvatarS
     },
     0,
     PERSONAL_SHADOW_POSITION,
-    personalShadowRoot
+    root
   )
+  if (pendingPersonalShadowPulse) {
+    pendingPersonalShadowPulse = false
+    shadowPulseUntil.set(visual.root, Date.now() + 850)
+  }
+  return visual
 }
 
 export function clearShadowVisuals() {
@@ -543,7 +584,8 @@ export function clearShadowVisuals() {
 
 export function animateShadowVisuals(deltaTime: number) {
   const now = Date.now()
-  if (energyEntity && energyFlight) {
+  if (energyFlight) {
+    const energyEntity = energyFlight.entity
     const progress = Math.min(1, (now - energyFlight.startedAt) / energyFlight.durationMs)
     const eased = progress * (2 - progress)
     const x = energyFlight.from.x + (energyFlight.to.x - energyFlight.from.x) * eased
@@ -553,8 +595,9 @@ export function animateShadowVisuals(deltaTime: number) {
     Transform.getMutable(energyEntity).scale = Vector3.create(1 + Math.sin(progress * Math.PI) * 0.55, 1 + Math.sin(progress * Math.PI) * 0.55, 1 + Math.sin(progress * Math.PI) * 0.55)
     if (progress >= 1) {
       VisibilityComponent.getMutable(energyEntity).visible = false
+      energyPool.release(energyEntity)
       energyFlight = null
-      if (personalShadowRoot) shadowPulseUntil.set(personalShadowRoot, now + 850)
+      triggerPersonalShadowReaction()
     }
   }
   for (const [root, motion] of shadowMotion) {
@@ -579,6 +622,6 @@ export function pulseChoicePad(choice: Choice) {
   choicePadPulseUntil.set(choice, Date.now() + 800)
 }
 
-export function playMomentSound(audioEntity: Entity | null) {
-  if (audioEntity) AudioSource.playSound(audioEntity, 'assets/scene/shadow-chime.wav', true)
+export function playMomentSound(audioEntity: Entity | null, cue: PresentationAudioCue = 'select') {
+  if (audioEntity) AudioSource.playSound(audioEntity, AUDIO_CUE_URLS[cue], true)
 }

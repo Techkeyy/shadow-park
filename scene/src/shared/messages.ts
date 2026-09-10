@@ -52,6 +52,8 @@ export const ShadowParkMessages = {
     currentStreak: Schemas.Number,
     bestStreak: Schemas.Number,
     shadowRank: Schemas.String,
+    previousRank: Schemas.String,
+    rankChanged: Schemas.Boolean,
     masterStars: Schemas.Number,
     milestoneBonus: Schemas.Number,
     chainLost: Schemas.Boolean,

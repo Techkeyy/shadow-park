@@ -32,6 +32,7 @@ type ParkUiState = {
   masterStarAwarded: boolean
   houseRank: number
   shadowLevel: number
+  rankUpMessage: string
   completed: boolean
   answerFeedback: string
   correctAnswer: string
@@ -68,6 +69,7 @@ const uiState: ParkUiState = {
   masterStarAwarded: false,
   houseRank: 0,
   shadowLevel: 0,
+  rankUpMessage: '',
   completed: false,
   answerFeedback: '',
   correctAnswer: '',
@@ -117,17 +119,61 @@ function resultCopy() {
   const correct = uiState.answerFeedback.startsWith('CORRECT')
   const headline = uiState.becameMaster ? 'MASTER' : correct ? 'CORRECT' : 'WRONG'
   const scoreDelta = correct ? `+${10 + uiState.milestoneBonus} SHADOW SCORE` : '+0 SHADOW SCORE'
-  const chainLine = correct ? `CHAIN x${uiState.currentStreak}` : uiState.chainLost ? 'CHAIN LOST' : ''
+  const chainLine = correct ? `CHAIN ${uiState.currentStreak}` : uiState.chainLost ? 'CHAIN LOST' : ''
   return (
     <UiEntity uiTransform={{ flexDirection: 'column', alignItems: 'center', margin: '8px 0 0', padding: '8px 12px' }}>
       <Label value={headline} color={uiState.becameMaster ? shadowPurple : correct ? shadowBlue : warmText} fontSize={26} textAlign="middle-center" />
       <Label value={scoreDelta} color={correct ? shadowBlue : mutedText} fontSize={16} textAlign="middle-center" />
       {chainLine && <Label value={chainLine} color={warmText} fontSize={13} textAlign="middle-center" />}
       <Label value={`SHADOW SCORE ${uiState.shadowScore}`} color={paleText} fontSize={17} textAlign="middle-center" />
+      <Label value={uiState.shadowRank} color={shadowPurple} fontSize={14} textAlign="middle-center" />
       {uiState.answerFeedback.startsWith('NOT THIS TIME') && uiState.correctAnswer && <Label value={`CORRECT ANSWER: ${uiState.correctAnswer}`} color={paleText} fontSize={12} textAlign="middle-center" />}
       {uiState.shadowAwakened && <Label value="YOUR SHADOW AWAKENS" color={shadowPurple} fontSize={12} textAlign="middle-center" />}
       {uiState.becameMaster && <Label value="THE HOUSE REMEMBERS YOU" color={shadowPurple} fontSize={12} textAlign="middle-center" />}
       {uiState.masterStarAwarded && <Label value={`MASTER STAR ${uiState.masterStars}`} color={shadowPurple} fontSize={12} textAlign="middle-center" />}
+    </UiEntity>
+  )
+}
+
+function progressionHud() {
+  if (!uiState.hydrated) return null
+  return (
+    <UiEntity
+      uiTransform={{
+        positionType: 'absolute',
+        position: { top: '3%', left: '4%' },
+        padding: '5px 9px',
+        borderRadius: 8,
+        flexDirection: 'column',
+        alignItems: 'flex-start'
+      }}
+      uiBackground={{ color: Color4.create(0.015, 0.02, 0.06, 0.5) }}
+    >
+      <Label value={`SHADOW SCORE ${uiState.shadowScore}`} color={paleText} fontSize={16} />
+      <Label value={`CHAIN ${uiState.currentStreak}`} color={uiState.currentStreak >= 5 ? warmText : shadowBlue} fontSize={14} />
+      <Label value={uiState.shadowRank} color={shadowPurple} fontSize={14} />
+      {uiState.bestStreak > 0 && <Label value={`BEST CHAIN ${uiState.bestStreak}`} color={mutedText} fontSize={11} />}
+    </UiEntity>
+  )
+}
+
+function rankUpPanel() {
+  if (!uiState.rankUpMessage) return null
+  return (
+    <UiEntity
+      uiTransform={{
+        positionType: 'absolute',
+        position: { top: '31%', left: '26%' },
+        width: '48%',
+        padding: '7px 10px',
+        borderRadius: 8,
+        flexDirection: 'column',
+        alignItems: 'center'
+      }}
+      uiBackground={{ color: Color4.create(0.12, 0.04, 0.2, 0.78) }}
+    >
+      <Label value="RANK UP" color={warmText} fontSize={19} textAlign="middle-center" />
+      <Label value={uiState.rankUpMessage} color={shadowPurple} fontSize={22} textAlign="middle-center" />
     </UiEntity>
   )
 }
@@ -161,7 +207,7 @@ function helperPanel() {
 }
 
 function ShadowParkUi() {
-  return <UiEntity uiTransform={{ width: '100%', height: '100%', pointerFilter: 'none' }}>{helperPanel()}</UiEntity>
+  return <UiEntity uiTransform={{ width: '100%', height: '100%', pointerFilter: 'none' }}>{progressionHud()}{helperPanel()}{rankUpPanel()}</UiEntity>
 }
 
 export function setupUi() {

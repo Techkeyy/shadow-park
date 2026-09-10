@@ -59,6 +59,47 @@ export const DECISION_ROUTE_BOUNDS = {
   B: { minX: 8.5, maxX: 13.12, minZ: 5.27, maxZ: 8.51 }
 } as const
 
+// Stage 2 presentation layout. The board is intentionally front-left of the
+// platform, rather than directly behind the avatar. The X-axis clearance keeps
+// the avatar body and hair outside the board's rear slab while the whole
+// platform remains south of the A/B decision routes.
+export const PERSONAL_SHADOW_LAYOUT = {
+  board: {
+    centerX: 5.15,
+    frontZ: 3.95,
+    panelWidth: 1.5,
+    panelHeight: 0.4,
+    bodyWidth: 1.68,
+    bodyDepth: 0.34,
+    rearWidth: 1.84,
+    rearDepth: 0.16,
+    rearOffsetZ: 0.46
+  },
+  platform: {
+    centerX: 7,
+    centerZ: 4.35,
+    width: 1.65,
+    depth: 1.35
+  },
+  avatar: {
+    centerX: 7,
+    centerZ: 4.35,
+    horizontalRadius: 0.45
+  }
+} as const
+
+export function personalShadowBoardRightEdge(): number {
+  return PERSONAL_SHADOW_LAYOUT.board.centerX + PERSONAL_SHADOW_LAYOUT.board.rearWidth / 2
+}
+
+export function personalShadowPlatformLeftEdge(): number {
+  return PERSONAL_SHADOW_LAYOUT.platform.centerX - PERSONAL_SHADOW_LAYOUT.platform.width / 2
+}
+
+export function personalShadowMinimumVisualSeparation(): number {
+  return PERSONAL_SHADOW_LAYOUT.avatar.centerX - PERSONAL_SHADOW_LAYOUT.avatar.horizontalRadius - personalShadowBoardRightEdge()
+}
+
 // Stable world-space identities. These are not camera-relative left/right.
 // Every visual marker, trigger, tally, and Shadow placement uses these values.
 export const CHOICE_A_ZONE: ChoiceZone = {

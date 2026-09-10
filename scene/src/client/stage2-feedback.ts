@@ -74,3 +74,43 @@ export function createSingleton<T>(): Singleton<T> {
     peek: () => value
   }
 }
+
+export const ENERGY_FLIGHT_DURATION_MS = 780
+export const ENERGY_ARC_HEIGHT = 0.64
+export const ENERGY_TRAIL_CAPACITY = 4
+
+export type EnergyArcPoint = {
+  x: number
+  y: number
+  z: number
+}
+
+/** Deterministic, bounded launch arc used by the mobile feedback effect. */
+export function energyArcPoint(from: EnergyArcPoint, to: EnergyArcPoint, progress: number, arcHeight = ENERGY_ARC_HEIGHT): EnergyArcPoint {
+  const t = Math.max(0, Math.min(1, progress))
+  const eased = t * (2 - t)
+  return {
+    x: from.x + (to.x - from.x) * eased,
+    y: from.y + (to.y - from.y) * eased + Math.sin(t * Math.PI) * arcHeight,
+    z: from.z + (to.z - from.z) * eased
+  }
+}
+
+export type RankProgress = {
+  current: number
+  target: number | null
+  nextRank: string | null
+}
+
+/** Uses the authoritative rank thresholds without inventing percentage progress. */
+export function rankProgressForCorrectCount(correctCount: number): RankProgress {
+  const targets: Array<[number, string]> = [
+    [1, 'AWAKENED'],
+    [5, 'SHADE'],
+    [10, 'WRAITH'],
+    [18, 'ECLIPSE'],
+    [30, 'MASTER']
+  ]
+  const next = targets.find(([threshold]) => correctCount < threshold)
+  return { current: Math.max(0, correctCount), target: next?.[0] ?? null, nextRank: next?.[1] ?? null }
+}

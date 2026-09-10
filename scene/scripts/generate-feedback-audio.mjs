@@ -37,6 +37,13 @@ function writeWav(fileName, durationSeconds, notes) {
   writeFileSync(target, Buffer.concat([header, data]))
 }
 
+writeWav('shadow-correct.wav', 0.68, [
+  { start: 0, end: 0.14, frequency: 523.25, amplitude: 0.3 },
+  { start: 0.055, end: 0.3, frequency: 659.25, amplitude: 0.28 },
+  { start: 0.16, end: 0.48, frequency: 783.99, amplitude: 0.24 },
+  { start: 0.28, end: 0.64, frequency: 1046.5, amplitude: 0.22 }
+])
+
 writeWav('shadow-wrong.wav', 0.18, [
   { start: 0, end: 0.09, frequency: 220, amplitude: 0.24 },
   { start: 0.075, end: 0.17, frequency: 165, amplitude: 0.22 }

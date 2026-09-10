@@ -643,10 +643,10 @@ function completeAnswerTransition(result: {
     runNonBlockingPresentationSteps(
       [
         { name: 'audio', run: () => playPresentationMomentSound(momentAudioEntity, cue) },
-        { name: 'energy', run: () => { if (result.correct) triggerShadowEnergy(lastAttemptedChoice ?? 'A') } },
+        { name: 'energy', run: () => { if (result.correct) triggerShadowEnergy(lastAttemptedChoice ?? 'A', result.rankChanged || result.becameMaster) } },
         { name: 'shadow_reaction', run: () => { if (result.correct) queuePersonalShadowReaction() } },
         { name: 'rejection_flash', run: () => { if (!result.correct) pulseChoicePad(lastAttemptedChoice ?? 'A') } },
-        { name: 'rank_presentation', run: () => { if (result.rankChanged) triggerPersonalShadowReaction(1200) } }
+        { name: 'rank_presentation', run: () => { if (result.rankChanged) updateUi({ rankUpMessage: result.shadowRank }) } }
       ],
       (failure) => traceTransition('presentation_step_failed', { sessionId, step: failure.name, error: String(failure.error) })
     )

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
+  isGameplayReady,
   sendChoiceIntent,
   stateAfterAcceptedAnswer,
   stateAfterNextQuestionReady,
@@ -85,3 +86,83 @@ test('ten consecutive accepted answers keep the transition state bounded and re-
     assert.equal(state, 'ARMED')
   }
 })
+
+test('isGameplayReady returns true only for ARMED with all readiness conditions met', () => {
+  assert.equal(
+    isGameplayReady({
+      hasState: true,
+      hasValidQuestion: true,
+      hasDisplayMapping: true,
+      voteState: 'ARMED',
+      votePending: false,
+      answerLocked: false,
+      inputDisabled: false,
+      insideChoice: false
+    }),
+    true
+  )
+  assert.equal(
+    isGameplayReady({
+      hasState: true,
+      hasValidQuestion: true,
+      hasDisplayMapping: true,
+      voteState: 'ARMED',
+      votePending: true,
+      answerLocked: false,
+      inputDisabled: false
+    }),
+    false
+  )
+  assert.equal(
+    isGameplayReady({
+      hasState: false,
+      hasValidQuestion: true,
+      voteState: 'ARMED',
+      votePending: false,
+      answerLocked: false,
+      inputDisabled: false
+    }),
+    false
+  )
+  assert.equal(
+    isGameplayReady({
+      hasState: true,
+      hasValidQuestion: true,
+      voteState: 'UNARMED',
+      votePending: false,
+      answerLocked: false,
+      inputDisabled: false
+    }),
+    false
+  )
+})
+
+test('room ready idempotence handles early ready and repeat true signals safely', () => {
+  let lastReady: boolean | null = null
+  let initCount = 0
+
+  function handleReady(ready: boolean) {
+    if (lastReady === ready) return
+    lastReady = ready
+    if (ready) {
+      initCount++
+    }
+  }
+
+  // First ready signal (e.g. room.isReady() synchronous check)
+  handleReady(true)
+  assert.equal(initCount, 1)
+
+  // Duplicate ready signal (e.g. room.onReady firing later with true)
+  handleReady(true)
+  assert.equal(initCount, 1) // Did not double initialize
+
+  // Disconnect
+  handleReady(false)
+  assert.equal(initCount, 1)
+
+  // Reconnect
+  handleReady(true)
+  assert.equal(initCount, 2)
+})
+

@@ -40,6 +40,7 @@ type ParkUiState = {
   nextQuestionId: string
   totalCompletions: number
   totalPlayers: number
+  startupStage: string
 }
 
 const uiState: ParkUiState = {
@@ -76,7 +77,8 @@ const uiState: ParkUiState = {
   correctAnswer: '',
   nextQuestionId: '',
   totalCompletions: 0,
-  totalPlayers: 0
+  totalPlayers: 0,
+  startupStage: 'CONNECTING'
 }
 
 const shadowPurple = Color4.create(0.74, 0.62, 1, 1)
@@ -86,7 +88,7 @@ const mutedText = Color4.create(0.72, 0.78, 0.9, 1)
 const warmText = Color4.create(1, 0.84, 0.46, 1)
 
 function helperCopy() {
-  if (!uiState.hydrated) return <Label value="CALLING BACK THE SHADOWS..." color={paleText} fontSize={15} textAlign="middle-center" />
+  if (!uiState.hydrated) return <Label value={uiState.startupStage || 'CONNECTING'} color={paleText} fontSize={15} textAlign="middle-center" />
   if (uiState.pendingChoice) {
     return (
       <UiEntity uiTransform={{ flexDirection: 'column', alignItems: 'center', margin: '2px 0 0' }}>
@@ -207,7 +209,6 @@ function helperPanel() {
       {showLoading && <Label value="SHADOW PARK" color={shadowPurple} fontSize={16} textAlign="middle-center" />}
       {helperCopy()}
       {resultCopy()}
-      {uiState.hydrated && !showResult && <Label value={`SHADOW SCORE ${uiState.shadowScore}`} color={paleText} fontSize={13} textAlign="middle-center" />}
       {feedback}
     </UiEntity>
   )

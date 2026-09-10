@@ -30,6 +30,23 @@ export function stateAfterNextQuestionReady(): VoteState {
   return 'ARMED'
 }
 
+export function isGameplayReady(params: {
+  hasState: boolean
+  hasValidQuestion: boolean
+  hasDisplayMapping?: boolean
+  voteState: VoteState
+  votePending: boolean
+  answerLocked: boolean
+  inputDisabled: boolean
+  insideChoice?: boolean
+}): boolean {
+  if (!params.hasState || !params.hasValidQuestion) return false
+  if (params.hasDisplayMapping === false) return false
+  if (params.votePending || params.answerLocked || params.inputDisabled) return false
+  if (params.insideChoice) return false
+  return params.voteState === 'ARMED'
+}
+
 export function sendChoiceIntent(
   voteState: VoteState,
   votePending: boolean,
@@ -40,3 +57,4 @@ export function sendChoiceIntent(
   if (decision.send) send(choice)
   return decision
 }
+

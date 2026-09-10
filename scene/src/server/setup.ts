@@ -1,4 +1,5 @@
 import { Storage } from '@dcl/sdk/server'
+import { onEnterScene } from '@dcl/sdk/players'
 import { room } from '../shared/messages'
 import {
   applyQuizAnswer,
@@ -142,6 +143,7 @@ async function handleAnswer(questionId: string, choiceValue: string, playerId: s
     const previousState = state
     const avatar = parseAvatarSnapshot(avatarJson)
     const result = applyQuizAnswer(state, run, choiceValue, playerId, new Date(), avatar)
+    console.log(`[DEV_ANSWER_DIAGNOSTICS] QUESTION ID: ${question.questionId} | DISPLAY A: ${question.answerA} | DISPLAY B: ${question.answerB} | SERVER CORRECT DISPLAY SIDE: ${question.correctSide} | PLAYER CHOSEN SIDE: ${choiceValue} | SERVER RESULT: ${result.correct ? 'CORRECT' : 'WRONG'} | NEXT QUESTION ID: ${result.nextQuestion?.questionId ?? ''} | NEXT DISPLAY A: ${result.nextQuestion?.answerA ?? ''} | NEXT DISPLAY B: ${result.nextQuestion?.answerB ?? ''} | NEXT CORRECT SIDE: ${result.nextQuestion?.correctSide ?? ''}`)
     if (!(await Storage.set(STATE_KEY, result.state))) {
       await room.send('answerResult', answerResultPayload(run, { message: 'The park could not remember that answer. Try again.', nextQuestionId: question.questionId }), { to: [playerId] })
       return
@@ -284,14 +286,29 @@ export async function setupServer() {
     if (!created) console.error('SHADOW PARK could not initialize persistent state')
   })()
 
+  const activePlayers = new Set<string>()
+  const notePlayerConnection = (playerId: string, source: string) => {
+    if (!activePlayers.has(playerId)) {
+      activePlayers.add(playerId)
+      trace('MOBILE_CONNECTION_OPEN', { playerId, source })
+    }
+  }
+
+  onEnterScene((player) => {
+    notePlayerConnection(player.userId, 'onEnterScene')
+  })
+
   room.onMessage('sessionCreated', (data, context) => {
     if (!context?.from) return
+    const playerId = context.from
+    notePlayerConnection(playerId, 'sessionCreated')
     // The player is ready to answer from the normal spawn flow. Keep the
     // server-side guard for malformed/late requests, while duplicate and
     // stale-question checks remain authoritative in handleAnswer.
-    sessionStates.set(context.from, 'ARMED')
-    trace('session_created', { playerId: context.from, sessionId: data.sessionId })
-    trace('initial_answer_state', { playerId: context.from, sessionId: data.sessionId, state: 'ARMED' })
+    sessionStates.set(playerId, 'ARMED')
+    trace('SESSION_CREATED_RECEIVED', { playerId, sessionId: data.sessionId })
+    trace('session_created', { playerId, sessionId: data.sessionId })
+    trace('initial_answer_state', { playerId, sessionId: data.sessionId, state: 'ARMED' })
   })
 
   room.onMessage('readyForNextQuestion', (data, context) => {
@@ -325,9 +342,21 @@ export async function setupServer() {
   room.onMessage('requestState', (data, context) => {
     if (!context?.from) return
     const playerId = context.from
+    notePlayerConnection(playerId, 'requestState')
+    trace('REQUEST_STATE_RECEIVED', { playerId, requestId: data.requestId })
     trace('state_request_received', { playerId, requestId: data.requestId })
     void hydrationPromise
-      .then(() => sendState(playerId, data.requestId))
+      .then(async () => {
+        const run = await loadRun(playerId)
+        trace('PLAYER_RUN_LOADED', {
+          playerId,
+          requestId: data.requestId,
+          lifetimeCorrect: run.lifetimeCorrect,
+          questionId: currentQuestionForRun(run)?.questionId ?? ''
+        })
+        await sendState(playerId, data.requestId)
+        trace('STATE_CHANGED_SENT', { playerId, requestId: data.requestId })
+      })
       .catch((error) => console.error('SHADOW PARK initial state request failed', error))
   })
 

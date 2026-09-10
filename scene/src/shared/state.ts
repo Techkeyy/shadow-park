@@ -70,6 +70,19 @@ export type LastAnswer = {
   correctAnswer: string
 }
 
+export type QuestionDisplayMapping = {
+  questionId: string
+  questionText: string
+  canonicalOption1: string
+  canonicalOption2: string
+  canonicalCorrectOption: string
+  choiceA: string
+  choiceB: string
+  correctSide: Choice
+  cycle: number
+  position: number
+}
+
 export type PlayerRun = {
   runId: string
   questionIds: string[]
@@ -95,6 +108,7 @@ export type PlayerRun = {
   lastChoice?: Choice
   lastAnswer?: LastAnswer
   appearanceSnapshot?: AvatarSnapshot
+  currentDisplay?: QuestionDisplayMapping
   completedAt?: string
   updatedAt: string
 }
@@ -160,6 +174,87 @@ function questionOrderFor(playerId: string, cycle: number, previousQuestionId?: 
   return order
 }
 
+export function displaySideScheduleFor(playerId: string, cycle: number, questionIds: string[] = QUIZ_QUESTIONS.map((question) => question.questionId)): Choice[] {
+  let countA = 0
+  let countB = 0
+  let previous: Choice | null = null
+  let runLength = 0
+  return questionIds.map((questionId, index) => {
+    const preferred: Choice = hash(playerId + ':' + QUIZ_ID + ':' + QUESTION_BANK_VERSION + ':display:' + cycle + ':' + index + ':' + questionId) % 2 === 0 ? 'A' : 'B'
+    let side = preferred
+    if (previous && runLength >= 2) side = previous === 'A' ? 'B' : 'A'
+    else if (countA > countB) side = 'B'
+    else if (countB > countA) side = 'A'
+    else if (index === 2 && previous) side = previous
+    if (side === 'A') countA += 1
+    else countB += 1
+    runLength = side === previous ? runLength + 1 : 1
+    previous = side
+    return side
+  })
+}
+
+function computedDisplayMappingForRun(run: PlayerRun): QuestionDisplayMapping {
+  const canonical = questionById(run.currentQuestionId) ?? QUIZ_QUESTIONS[0]
+  const schedule = displaySideScheduleFor(run.runId, run.questionCycle, run.questionIds)
+  const currentIndex = Math.max(0, run.questionIds.findIndex((questionId) => questionId === canonical.questionId))
+  const correctSide: Choice = schedule[currentIndex] ?? 'A'
+
+  const canonicalCorrectAnswer = canonical.correctSide === 'A' ? canonical.answerA : canonical.answerB
+  const canonicalWrongAnswer = canonical.correctSide === 'A' ? canonical.answerB : canonical.answerA
+
+  const choiceA = correctSide === 'A' ? canonicalCorrectAnswer : canonicalWrongAnswer
+  const choiceB = correctSide === 'B' ? canonicalCorrectAnswer : canonicalWrongAnswer
+
+  return {
+    questionId: canonical.questionId,
+    questionText: canonical.questionText,
+    canonicalOption1: canonical.answerA,
+    canonicalOption2: canonical.answerB,
+    canonicalCorrectOption: canonicalCorrectAnswer,
+    choiceA,
+    choiceB,
+    correctSide,
+    cycle: run.questionCycle,
+    position: currentIndex
+  }
+}
+
+function validDisplayMapping(value: unknown, questionId: string): value is QuestionDisplayMapping {
+  if (!value || typeof value !== 'object') return false
+  const candidate = value as Partial<QuestionDisplayMapping>
+  const canonical = questionById(questionId)
+  if (!canonical) return false
+  const canonicalCorrectAnswer = canonical.correctSide === 'A' ? canonical.answerA : canonical.answerB
+  const canonicalWrongAnswer = canonical.correctSide === 'A' ? canonical.answerB : canonical.answerA
+
+  const isMatchingQuestion = candidate.questionId === questionId && isChoice(candidate.correctSide ?? '')
+  if (!isMatchingQuestion) return false
+
+  const correctSide = candidate.correctSide as Choice
+  const expectedA = correctSide === 'A' ? canonicalCorrectAnswer : canonicalWrongAnswer
+  const expectedB = correctSide === 'B' ? canonicalCorrectAnswer : canonicalWrongAnswer
+
+  return candidate.choiceA === expectedA && candidate.choiceB === expectedB
+}
+
+export function displayMappingForRun(run: PlayerRun): QuestionDisplayMapping {
+  return validDisplayMapping(run.currentDisplay, run.currentQuestionId) ? run.currentDisplay : computedDisplayMappingForRun(run)
+}
+
+export function displayedQuestionForRun(run: PlayerRun): QuizQuestion | undefined {
+  const canonical = questionById(run.currentQuestionId) ?? questionById(run.questionIds[run.currentQuestionIndex])
+  if (!canonical) return undefined
+  const mapping = displayMappingForRun(run)
+  return {
+    ...canonical,
+    questionText: mapping.questionText,
+    answerA: mapping.choiceA,
+    answerB: mapping.choiceB,
+    correctSide: mapping.correctSide
+  }
+}
+
 export function rankForLifetimeCorrect(correctCount: number): ShadowRank {
   if (correctCount >= 30) return 'MASTER'
   if (correctCount >= 18) return 'ECLIPSE'
@@ -177,6 +272,22 @@ export function shadowLevelForCorrectCount(correctCount: number): number {
   return Math.max(0, Math.min(5, correctCount >= 30 ? 5 : correctCount >= 18 ? 4 : correctCount >= 10 ? 3 : correctCount >= 5 ? 2 : correctCount >= 1 ? 1 : 0))
 }
 
+export function personalShadowBaseScale(lifetimeCorrect: number): number {
+  if (lifetimeCorrect <= 0) return 0.92
+  if (lifetimeCorrect >= 30) return 1.30
+  let scale = 0.92
+  if (lifetimeCorrect < 5) {
+    scale = 0.93 + ((lifetimeCorrect - 1) / 3) * 0.05
+  } else if (lifetimeCorrect < 10) {
+    scale = 0.99 + ((lifetimeCorrect - 5) / 4) * 0.07
+  } else if (lifetimeCorrect < 18) {
+    scale = 1.07 + ((lifetimeCorrect - 10) / 7) * 0.08
+  } else {
+    scale = 1.16 + ((lifetimeCorrect - 18) / 11) * 0.08
+  }
+  return Math.round(scale * 10000) / 10000
+}
+
 export function milestoneBonus(streak: number): number {
   if (streak === 5) return 20
   if (streak === 10) return 50
@@ -188,7 +299,7 @@ export function milestoneBonus(streak: number): number {
 export function createRunForPlayer(playerId: string, now = new Date()): PlayerRun {
   const questionIds = questionOrderFor(playerId, 0)
   const currentQuestionId = questionIds[0] ?? QUIZ_QUESTIONS[0].questionId
-  return {
+  const run: PlayerRun = {
     runId: `${QUIZ_ID}:${playerId}`,
     questionIds,
     currentQuestionIndex: 0,
@@ -210,10 +321,12 @@ export function createRunForPlayer(playerId: string, now = new Date()): PlayerRu
     completed: false,
     updatedAt: now.toISOString()
   }
+  run.currentDisplay = displayMappingForRun(run)
+  return run
 }
 
 export function currentQuestionForRun(run: PlayerRun): QuizQuestion | undefined {
-  return questionById(run.currentQuestionId) ?? questionById(run.questionIds[run.currentQuestionIndex])
+  return displayedQuestionForRun(run)
 }
 
 export type AnswerResult = {
@@ -270,8 +383,10 @@ export function answerQuestion(run: PlayerRun, question: QuizQuestion, choice: C
     lastChoice: choice,
     lastAnswer: { questionId: question.questionId, choice, correct, correctAnswer },
     appearanceSnapshot: run.appearanceSnapshot,
+    currentDisplay: undefined,
     updatedAt: now.toISOString()
   }
+  nextRun.currentDisplay = displayMappingForRun(nextRun)
   return {
     correct,
     correctAnswer,
@@ -423,8 +538,10 @@ function parseRun(value: unknown): PlayerRun | null {
     answeredQuestionIds,
     shadowLevel: typeof candidate.shadowLevel === 'number' ? candidate.shadowLevel : shadowLevelForCorrectCount(lifetimeCorrect),
     completed: false,
+    currentDisplay: undefined,
     updatedAt: typeof candidate.updatedAt === 'string' ? candidate.updatedAt : new Date().toISOString()
   }
+  run.currentDisplay = validDisplayMapping(candidate.currentDisplay, run.currentQuestionId) ? candidate.currentDisplay : displayMappingForRun(run)
   return run
 }
 

@@ -1,6 +1,6 @@
 import { AudioSource, AvatarShape, Entity, Material, MeshRenderer, Transform, VisibilityComponent, engine } from '@dcl/sdk/ecs'
 import { Color4, Quaternion, Vector3 } from '@dcl/sdk/math'
-import { AvatarSnapshot, Choice, CURATED_QUESTIONS, ParkState, QUIZ_QUESTIONS, ShadowRecord } from '../shared/state'
+import { AvatarSnapshot, Choice, CURATED_QUESTIONS, ParkState, QUIZ_QUESTIONS, ShadowRecord, personalShadowBaseScale, questionById } from '../shared/state'
 import {
   CHOICE_A_ZONE,
   CHOICE_B_ZONE,
@@ -220,43 +220,6 @@ function createDestination(choice: Choice) {
   // visually obvious from the central plaza.
 }
 
-function createHouseOfMasters() {
-  const center = Vector3.create(HOUSE_OF_MASTERS_ZONE.centerX, 0.05, HOUSE_OF_MASTERS_ZONE.centerZ)
-  const gardenBase = Color4.create(0.018, 0.035, 0.075, 1)
-  const frame = Color4.create(0.12, 0.12, 0.25, 1)
-  const trim = Color4.create(0.3, 0.14, 0.52, 1)
-  box(center, Vector3.create(HOUSE_OF_MASTERS_ZONE.scaleX, 0.1, HOUSE_OF_MASTERS_ZONE.scaleZ), gardenBase)
-  // A cool inset floor and low edge stones make this read as a small gallery
-  // pocket rather than another board attached to the quiz plaza.
-  box(Vector3.create(center.x, 0.105, center.z), Vector3.create(HOUSE_OF_MASTERS_ZONE.scaleX - 0.35, 0.025, HOUSE_OF_MASTERS_ZONE.scaleZ - 0.35), Color4.create(0.028, 0.05, 0.11, 1))
-  // A small open pavilion gives the social history a real destination. The
-  // front remains open for comfortable mobile entry and clear sightlines,
-  // while the roof/back/side walls make it read as a building rather than a
-  // second information board.
-  box(Vector3.create(center.x, 2.65, center.z + 0.25), Vector3.create(4.45, 0.24, 3.0), frame)
-  box(Vector3.create(center.x, 2.48, center.z + 0.25), Vector3.create(4.1, 0.08, 2.55), trim)
-  box(Vector3.create(center.x, 1.3, center.z + 1.38), Vector3.create(4.2, 2.45, 0.24), frame)
-  box(Vector3.create(center.x - 2.0, 1.3, center.z + 0.25), Vector3.create(0.24, 2.45, 2.55), frame)
-  box(Vector3.create(center.x + 2.0, 1.3, center.z + 0.25), Vector3.create(0.24, 2.45, 2.55), frame)
-  for (const x of [center.x - 1.9, center.x + 1.9]) {
-    box(Vector3.create(x, 1.35, center.z - 1.05), Vector3.create(0.28, 2.65, 0.28), trim)
-  }
-  box(Vector3.create(center.x, 0.16, center.z - 1.3), Vector3.create(2.3, 0.06, 1.0), Color4.create(0.09, 0.12, 0.24, 1))
-  const entranceGlow = cylinder(Vector3.create(center.x, 0.25, center.z - 1.25), Vector3.create(0.8, 0.24, 0.8), Color4.create(0.16, 0.58, 0.68, 1), 0.62, 0.5)
-  Material.setPbrMaterial(entranceGlow, { albedoColor: Color4.create(0.16, 0.58, 0.68, 1), emissiveColor: Color4.create(0.16, 0.58, 0.68, 1), emissiveIntensity: 0.8, roughness: 0.75, metallic: 0 })
-  // One restrained entrance marker; the historical Shadows are the content.
-  texturedSign(
-    'assets/scene/signs/house-of-masters.png',
-    // Facade sign above the doorway: it identifies the building without ever
-    // occupying the mobile walking entrance below.
-    Vector3.create(center.x, 3.25, center.z - 1.28),
-    Vector3.create(2.45, 0.82, 1),
-    Vector3.create(2.72, 1.02, 1),
-    frame,
-    Color4.create(0.018, 0.024, 0.055, 1)
-  )
-}
-
 function createLandscaping() {
   const violet = Color4.create(0.28, 0.18, 0.46, 1)
   const teal = Color4.create(0.08, 0.28, 0.34, 1)
@@ -291,21 +254,6 @@ function createLandscaping() {
   }
   forkPath('A', CHOICE_A_ZONE.centerX)
   forkPath('B', CHOICE_B_ZONE.centerX)
-
-  // The Hall path leaves the spawn plaza below both capture footprints, then
-  // turns north along the parcel edge. A visitor can discover the Hall without
-  // crossing either answer capture zone on the way there.
-  for (const x of [7.35, 6.55, 5.75, 4.95, 4.15, 3.35, 2.55, 1.75, 0.95]) {
-    box(Vector3.create(x, 0.055, 4.45), Vector3.create(0.62, 0.05, 0.62), Color4.create(0.045, 0.07, 0.12, 1))
-  }
-  for (const z of [5.55, 7.15, 8.75, 10.35, 11.95]) {
-    box(Vector3.create(0, 0.055, z), Vector3.create(0.28, 0.05, 0.62), Color4.create(0.045, 0.07, 0.12, 1))
-  }
-  // Final turn into the House makes the secondary destination discoverable
-  // without sending visitors through either answer footprint.
-  for (const [x, z] of [[0.55, 12.45], [1.05, 12.75], [1.55, 12.95], [2.05, 13.05]] as Array<[number, number]>) {
-    box(Vector3.create(x, 0.055, z), Vector3.create(0.62, 0.05, 0.62), Color4.create(0.055, 0.11, 0.18, 1))
-  }
 
   // A soft landscaping divider breaks the sightline from the Hall back to the
   // active quiz board without making the secondary space feel walled off.
@@ -344,20 +292,11 @@ export function createPresentationV2() {
   createQuestionLandmark()
   createDestination('A')
   createDestination('B')
-  createHouseOfMasters()
   // A small dedicated pedestal keeps the current player's Shadow visible from
   // the quiz plaza without placing it in either answer route.
   box(Vector3.create(PERSONAL_SHADOW_LAYOUT.platform.centerX, 0.06, PERSONAL_SHADOW_LAYOUT.platform.centerZ), Vector3.create(PERSONAL_SHADOW_LAYOUT.platform.width, 0.08, PERSONAL_SHADOW_LAYOUT.platform.depth), Color4.create(0.08, 0.045, 0.18, 1))
   const personalPedestalGlow = cylinder(Vector3.create(PERSONAL_SHADOW_LAYOUT.platform.centerX, 0.25, PERSONAL_SHADOW_LAYOUT.platform.centerZ), Vector3.create(0.78, 0.35, 0.78), Color4.create(0.42, 0.16, 0.48, 1), 0.62, 0.5)
   Material.setPbrMaterial(personalPedestalGlow, { albedoColor: Color4.create(0.42, 0.16, 0.48, 1), emissiveColor: Color4.create(0.55, 0.2, 0.65, 1), emissiveIntensity: 1.2, roughness: 0.72, metallic: 0 })
-  texturedSign(
-    'assets/scene/signs/your-shadow.png',
-    Vector3.create(PERSONAL_SHADOW_LAYOUT.board.centerX, 0.9, PERSONAL_SHADOW_LAYOUT.board.frontZ),
-    Vector3.create(PERSONAL_SHADOW_LAYOUT.board.panelWidth, PERSONAL_SHADOW_LAYOUT.board.panelHeight, 1),
-    Vector3.create(PERSONAL_SHADOW_LAYOUT.board.bodyWidth, 0.58, PERSONAL_SHADOW_LAYOUT.board.bodyDepth),
-    Color4.create(0.12, 0.1, 0.22, 1),
-    Color4.create(0.018, 0.024, 0.055, 1)
-  )
   createLandscaping()
 
   const audioEntity = engine.addEntity()
@@ -463,18 +402,23 @@ export function queuePersonalShadowReaction() {
 
 export function updateQuestionSurface(state: ParkState) {
   if (!questionSurface || !choiceSurfaces.A || !choiceSurfaces.B) return
-  const indexById = QUIZ_QUESTIONS.findIndex((question) => question.questionId === state.questionId)
-  const indexByContent = CURATED_QUESTIONS.findIndex((question) => question.question === state.question && question.choiceA === state.choiceA && question.choiceB === state.choiceB)
-  const index = indexById >= 0 ? indexById : indexByContent
+  const canonical = questionById(state.questionId) ?? QUIZ_QUESTIONS.find((q) => q.questionText === state.question) ?? QUIZ_QUESTIONS[0]
+  const index = QUIZ_QUESTIONS.findIndex((q) => q.questionId === canonical.questionId)
   const activeIndex = state.questionId === 'quiz-complete' ? BOARD_PANEL_TEXTURES.length - 1 : index >= 0 ? index : 0
+
+  const boardTexture = BOARD_PANEL_TEXTURES[activeIndex] ?? BOARD_PANEL_TEXTURES[0]
   Material.setBasicMaterial(questionSurface, {
-    texture: Material.Texture.Common({ src: BOARD_PANEL_TEXTURES[activeIndex] ?? BOARD_PANEL_TEXTURES[0] })
+    texture: Material.Texture.Common({ src: boardTexture })
   })
+
   for (const choice of ['A', 'B'] as Choice[]) {
     const surface = choiceSurfaces[choice]
     if (!surface) continue
+    const displayedText = choice === 'A' ? state.choiceA : state.choiceB
+    const contentChoice: Choice = displayedText === canonical.answerB ? 'B' : 'A'
+    const choiceTexture = choiceTexturePath(contentChoice, activeIndex)
     Material.setBasicMaterial(surface, {
-      texture: Material.Texture.Common({ src: choiceTexturePath(choice, activeIndex) })
+      texture: Material.Texture.Common({ src: choiceTexture })
     })
   }
 }
@@ -666,7 +610,16 @@ export function createShadowVisual(shadow: ShadowRecord, sideIndex = shadow.slot
   return { root, position }
 }
 
-export function createPersonalShadowVisual(shadowLevel: number, avatar?: AvatarSnapshot) {
+export { personalShadowBaseScale }
+
+let currentPersonalShadowScale = 0.92
+
+export function getPersonalShadowScale(): number {
+  return currentPersonalShadowScale
+}
+
+export function createPersonalShadowVisual(shadowLevel: number, avatar?: AvatarSnapshot, lifetimeCorrect = 0) {
+  currentPersonalShadowScale = personalShadowBaseScale(lifetimeCorrect)
   const root = personalShadowRoot.getOrCreate(() => engine.addEntity())
   const visual = createShadowVisual(
     {
@@ -682,6 +635,10 @@ export function createPersonalShadowVisual(shadowLevel: number, avatar?: AvatarS
     PERSONAL_SHADOW_POSITION,
     root
   )
+  const existingTransform = Transform.getOrNull(root)
+  if (existingTransform) {
+    Transform.getMutable(root).scale = Vector3.create(currentPersonalShadowScale, currentPersonalShadowScale, currentPersonalShadowScale)
+  }
   ensurePersonalShadowImpactVisuals(visual.root)
   if (pendingPersonalShadowPulse) {
     pendingPersonalShadowPulse = false
@@ -733,12 +690,14 @@ export function animateShadowVisuals(deltaTime: number) {
     const transform = Transform.getMutable(root)
     const pulse = shadowPulseUntil.get(root)
     const impact = shadowImpactByRoot.get(root)
+    const isPersonal = root === personalShadowRoot.peek()
+    const baseScale = isPersonal ? currentPersonalShadowScale : 1
     transform.position.y = motion.baseY + Math.sin(deltaTime * 0 + now / 1000 * 1.35 + motion.phase) * 0.04
     if (impact) {
       const progress = Math.min(1, (now - impact.startedAt) / impact.durationMs)
       const envelope = progress < 0.28 ? progress / 0.28 : (1 - progress) / 0.72
       const surge = Math.max(0, envelope) * (impact.maxScale - 1)
-      transform.scale = Vector3.create(1 + surge, 1 + surge, 1 + surge)
+      transform.scale = Vector3.create(baseScale * (1 + surge), baseScale * (1 + surge), baseScale * (1 + surge))
       if (personalShadowImpactRing) {
         const ringScale = 0.72 + Math.max(0, envelope) * 0.85
         Transform.getMutable(personalShadowImpactRing).scale = Vector3.create(ringScale, 1, ringScale)
@@ -754,7 +713,7 @@ export function animateShadowVisuals(deltaTime: number) {
       }
     } else {
       const pulseStrength = pulse && pulse > now ? 0.06 : 0
-      transform.scale = Vector3.create(1 + pulseStrength, 1 + pulseStrength, 1 + pulseStrength)
+      transform.scale = Vector3.create(baseScale * (1 + pulseStrength), baseScale * (1 + pulseStrength), baseScale * (1 + pulseStrength))
     }
   }
   for (const choice of ['A', 'B'] as Choice[]) {

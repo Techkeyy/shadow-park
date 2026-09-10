@@ -9,6 +9,7 @@ import { choiceCaptureBounds, hallShadowGridForSlot, isInsideChoiceCapture, zone
 import { setupUi, UiVoteState, updateUi, updateUiFromState } from './ui'
 import { runCriticalAnswerTransition } from './core-transition'
 import { recenterAndVerify } from './recenter'
+import { runOptionalRestore } from './optional-restore'
 import { runNonBlockingPresentationSteps } from './stage2-feedback'
 import { sendChoiceIntent, stateAfterAcceptedAnswer, stateAfterNextQuestionReady, stateAfterRecenter } from './vote-intent'
 import {
@@ -27,9 +28,7 @@ import {
   updateQuestionSurface
 } from './presentation-v2'
 
-// Match the authored spawn point. Returning to the actual south spawn makes
-// the reset unmistakable on mobile and keeps the next question in the same
-// sightline as the first question.
+export const BUILD_MARKER = 'RESCUE-STARTUP-f9a2'
 const NEUTRAL_CENTER = Vector3.create(8, 0.15, 1.5)
 const NEUTRAL_TOLERANCE_X = 1.6
 const NEUTRAL_TOLERANCE_Z = 1.1
@@ -53,6 +52,7 @@ let personalShadowVisible = false
 let personalShadowPresentationPending = false
 let recenterInFlightQuestionId = ''
 let roomReady = false
+let lastRoomReadyState: boolean | null = null
 let answerLocked = false
 let recenterRequested = false
 let recenterCompleted = false
@@ -69,6 +69,20 @@ const resonatedShadowIds = new Set<string>()
 let momentAudioEntity: Entity | null = null
 
 const RECOVERY_TRACE_EVENTS = new Set([
+  'CLIENT_BOOT',
+  'ROOM_READY_CALLBACK',
+  'ROOM_IS_READY_SNAPSHOT',
+  'ROOM_READY_POLL_DETECTED',
+  'HANDLE_ROOM_READY',
+  'SESSION_CREATED_SENT',
+  'REQUEST_STATE_SENT',
+  'STATE_CHANGED_RECEIVED',
+  'PLAYER_STATE_APPLIED',
+  'QUESTION_MAPPING_APPLIED',
+  'GAMEPLAY_READY_TRUE',
+  'PADS_ARMED',
+  'CALLING_BACK_SHADOWS_CLEARED',
+  'RECOVERY_REQUESTSTATE_GUARD',
   'room_ready_changed',
   'session_created',
   'state_request_sent',
@@ -83,16 +97,16 @@ const RECOVERY_TRACE_EVENTS = new Set([
   'result_ui_set',
   'locking_ui_cleared',
   'recenter_started',
-    'vote_intent_created',
-    'choice_pulse_failed',
-    'choice_sound_failed',
+  'vote_intent_created',
+  'choice_pulse_failed',
+  'choice_sound_failed',
   'answer_result_received',
   'answer_result_rejected',
   'answer_result_duplicate_ignored',
-    'result_ui_triggered',
-    'result_sound_failed',
-    'result_energy_failed',
-    'recenter_request_created',
+  'result_ui_triggered',
+  'result_sound_failed',
+  'result_energy_failed',
+  'recenter_request_created',
   'transition_started',
   'player_recenter_input_locked',
   'recenter_position_sample',
@@ -276,11 +290,37 @@ function clearShadows() {
 
 function renderState(state: ParkState, timing: StateTiming) {
   const renderStartedAtMs = Date.now()
+  trace('STATE_CHANGED_RECEIVED', {
+    sessionId,
+    requestId: timing.requestId,
+    questionId: state.questionId,
+    serverSentAtIso: timing.serverSentAtIso
+  })
   if (parkState?.questionId !== state.questionId) lastAttemptedQuestionId = ''
   parkState = state
   currentQuestionId = state.questionId
+
+  trace('PLAYER_STATE_APPLIED', {
+    sessionId,
+    questionId: state.questionId,
+    lifetimeCorrect: state.run?.lifetimeCorrect ?? 0,
+    shadowScore: state.run?.shadowScore ?? 0,
+    shadowRank: state.run?.shadowRank ?? 'DORMANT'
+  })
+  updateUi({ startupStage: 'APPLYING QUESTION' })
+
   updateQuestionSurface(state)
+  trace('QUESTION_MAPPING_APPLIED', {
+    sessionId,
+    questionId: state.questionId,
+    choiceA: state.choiceA,
+    choiceB: state.choiceB
+  })
+
   updateUiFromState(state)
+  updateUi({ startupStage: 'READY', hydrated: true })
+  trace('CALLING_BACK_SHADOWS_CLEARED', { sessionId, questionId: state.questionId })
+
   if (voteState === 'UNARMED' && !votePending) {
     const player = Transform.getOrNull(engine.PlayerEntity)
     const insideChoice = player ? isInsideChoiceCapture('A', player.position.x, player.position.z) || isInsideChoiceCapture('B', player.position.x, player.position.z) : false
@@ -289,15 +329,27 @@ function renderState(state: ParkState, timing: StateTiming) {
     } else {
       voteState = 'ARMED'
       updateUi({ voteState })
+      trace('PADS_ARMED', { sessionId, questionId: state.questionId, voteState: 'ARMED' })
       setStatus(state.run?.lifetimeAnswered ? `${state.run.shadowRank} • SHADOW SCORE ${state.run.shadowScore}` : 'WALK TO A OR B')
     }
   }
+
+  const isGameplayReady = Boolean(
+    state.run &&
+    state.questionId &&
+    state.choiceA &&
+    state.choiceB &&
+    !pendingResultQuestionId &&
+    !answerLocked &&
+    (voteState === 'ARMED' || voteState === 'UNARMED')
+  )
+  if (isGameplayReady) {
+    trace('GAMEPLAY_READY_TRUE', { sessionId, questionId: state.questionId, voteState })
+  }
+
   const previousShadowIds = new Set(shadowRootsById.keys())
   clearShadows()
   const visibleShadows = state.shadows.slice(-MAX_VISIBLE_SHADOWS)
-  for (const [shadowIndex, shadow] of visibleShadows.entries()) {
-    createShadow(shadow, shadowIndex)
-  }
   const hasAnswered = Boolean(state.run && state.run.lifetimeCorrect > 0)
   const personalShadowAwakened = hasAnswered && !personalShadowVisible
   if (personalShadowAwakened) trace('personal_shadow_materialized', { sessionId, shadowLevel: state.run?.shadowLevel ?? 0 })
@@ -306,17 +358,17 @@ function renderState(state: ParkState, timing: StateTiming) {
     personalShadowPresentationPending = true
     const shadowLevel = state.run.shadowLevel
     const avatar = currentAvatarSnapshot()
-    timers.setTimeout(() => {
+    runOptionalRestore('personal_shadow_creation', () => {
       personalShadowPresentationPending = false
       try {
         trace('personal_shadow_presentation_started', { sessionId, shadowLevel })
-        const personalShadow = createPersonalShadowVisual(shadowLevel, avatar)
+        const personalShadow = createPersonalShadowVisual(shadowLevel, avatar, state.run?.lifetimeCorrect ?? 0)
         if (personalShadowAwakened) shadowPulseUntil.set(personalShadow.root, Date.now() + 1200)
         trace('personal_shadow_presentation_ready', { sessionId, shadowLevel })
       } catch (error) {
         trace('personal_shadow_presentation_failed', { sessionId, shadowLevel, error: String(error) })
       }
-    }, 0)
+    })
   }
   const newest = visibleShadows[visibleShadows.length - 1]
   if (newest && !previousShadowIds.has(newest.id)) {
@@ -364,6 +416,7 @@ function requestStateSnapshot(reason: string) {
   const sentAtMs = Date.now()
   const sentAtIso = new Date(sentAtMs).toISOString()
   pendingStateRequests.set(requestId, { sentAtMs, sentAtIso })
+  trace('REQUEST_STATE_SENT', { requestId, requestSentAtIso: sentAtIso, reason })
   trace('state_request_sent', { requestId, requestSentAtIso: sentAtIso, reason })
   void room.send('requestState', { requestId }).catch((error) => {
     pendingStateRequests.delete(requestId)
@@ -371,12 +424,15 @@ function requestStateSnapshot(reason: string) {
   })
 }
 
-function scheduleStateRecovery() {
+let startupRecoveryScheduled = false
+function scheduleStartupRecovery() {
+  if (startupRecoveryScheduled) return
+  startupRecoveryScheduled = true
   timers.setTimeout(() => {
     if (!roomReady || parkState) return
-    requestStateSnapshot('recovery')
-    scheduleStateRecovery()
-  }, 2500)
+    trace('RECOVERY_REQUESTSTATE_GUARD', { reason: 'startup-recovery' })
+    requestStateSnapshot('startup-recovery')
+  }, 1800)
 }
 
 function sendReadyForNextQuestion(questionId: string) {
@@ -710,6 +766,7 @@ function playMomentSound() {
 }
 
 export function setupClient() {
+  trace('CLIENT_BOOT', { marker: BUILD_MARKER, atIso: new Date().toISOString() })
   trace('client_setup_started')
   setupUi()
   const presentationStartedAtMs = Date.now()
@@ -735,6 +792,14 @@ export function setupClient() {
     const receivedAtMs = Date.now()
     const receivedAtIso = new Date(receivedAtMs).toISOString()
     const requestTiming = pendingStateRequests.get(requestId)
+    trace('STATE_CHANGED_RECEIVED', {
+      sessionId,
+      requestId,
+      serverSentAtIso,
+      clientReceivedAtIso: receivedAtIso,
+      requestSentAtIso: requestTiming?.sentAtIso ?? '',
+      requestRoundTripMs: requestTiming === undefined ? null : receivedAtMs - requestTiming.sentAtMs
+    })
     trace('state_message_received', {
       requestId,
       serverSentAtIso,
@@ -742,6 +807,7 @@ export function setupClient() {
       requestSentAtIso: requestTiming?.sentAtIso ?? '',
       requestRoundTripMs: requestTiming === undefined ? null : receivedAtMs - requestTiming.sentAtMs
     })
+    updateUi({ startupStage: 'STATE RECEIVED' })
     pendingStateRequests.delete(requestId)
     try {
       const nextState = parseState(JSON.parse(stateJson))
@@ -823,12 +889,23 @@ export function setupClient() {
     setStatus(message)
   })
 
-  room.onMessage('globalStateChanged', ({ stateJson, serverSentAtIso }) => {
+  room.onMessage('globalStateChanged', ({ stateJson }) => {
     try {
       const globalState = parseState(JSON.parse(stateJson))
       if (!globalState) return
-      const merged = parkState?.run ? { ...globalState, run: parkState.run, questionId: parkState.questionId, question: parkState.question, choiceA: parkState.choiceA, choiceB: parkState.choiceB } : globalState
-      if (parkState?.run) renderState(merged, { requestId: 'global-' + Date.now(), requestSentAtIso: '', serverSentAtIso, receivedAtMs: Date.now(), receivedAtIso: new Date().toISOString() })
+      if (parkState) {
+        parkState.countA = globalState.countA
+        parkState.countB = globalState.countB
+        parkState.totalPlayers = globalState.totalPlayers
+        parkState.totalCompletions = globalState.totalCompletions
+        parkState.houseMasters = globalState.houseMasters
+      }
+      updateUi({
+        countA: globalState.countA,
+        countB: globalState.countB,
+        totalPlayers: globalState.totalPlayers,
+        totalCompletions: globalState.totalCompletions
+      })
     } catch (error) {
       console.error('SHADOW PARK received invalid global state', error)
     }
@@ -848,8 +925,11 @@ export function setupClient() {
     timers.setTimeout(() => updateUi({ liveMoment: '' }), 2600)
   })
 
-  room.onReady((ready) => {
-    trace('room_ready_changed', { ready })
+  function handleRoomReady(source: string, ready: boolean) {
+    trace('HANDLE_ROOM_READY', { source, ready, alreadyReady: roomReady, lastRoomReadyState })
+    if (lastRoomReadyState === ready) return
+    lastRoomReadyState = ready
+    trace('room_ready_changed', { source, ready })
     roomReady = ready
     if (!ready) {
       transitionSequence += 1
@@ -861,7 +941,7 @@ export function setupClient() {
       neutralReady = false
       footprintChoice = null
       voteState = 'UNARMED'
-      updateUi({ voteState })
+      updateUi({ voteState, startupStage: 'CONNECTING' })
       setStatus(parkState ? 'Reconnecting to the park...' : 'Calling back the Shadows...')
       return
     }
@@ -872,14 +952,46 @@ export function setupClient() {
     neutralReady = false
     voteState = 'UNARMED'
     resonatedShadowIds.clear()
-    updateUi({ voteState, resonateStatus: '', liveMoment: '', entryHintVisible: true, pendingChoice: '' })
+    updateUi({
+      voteState,
+      resonateStatus: '',
+      liveMoment: '',
+      entryHintVisible: true,
+      pendingChoice: '',
+      startupStage: 'WAITING FOR STATE'
+    })
     updateUi({ voteState, hydrated: Boolean(parkState) })
     timers.setTimeout(() => updateUi({ entryHintVisible: false }), 8000)
+    trace('SESSION_CREATED_SENT', { sessionId, source })
     trace('session_created', { sessionId })
     trace('initial_answer_state', { sessionId, state: voteState })
     void room.send('sessionCreated', { sessionId })
     if (!parkState) setStatus('Calling back the Shadows...')
+    trace('REQUEST_STATE_SENT', { sessionId, reason: 'initial', source })
     requestStateSnapshot('initial')
-    if (!parkState) scheduleStateRecovery()
+    scheduleStartupRecovery()
+  }
+
+  room.onReady((ready) => {
+    trace('ROOM_READY_CALLBACK', { ready })
+    handleRoomReady('onReady', ready)
   })
+  const isReadySnapshot = room.isReady()
+  trace('ROOM_IS_READY_SNAPSHOT', { isReady: isReadySnapshot })
+  if (isReadySnapshot) {
+    handleRoomReady('isReadySnapshot', true)
+  }
+
+  let readyCheckTicks = 0
+  const readyPollSystem = (dt: number) => {
+    readyCheckTicks++
+    if (!roomReady && room.isReady()) {
+      trace('ROOM_READY_POLL_DETECTED', { readyCheckTicks })
+      handleRoomReady('poll', true)
+    }
+    if (roomReady && parkState) {
+      engine.removeSystem(readyPollSystem)
+    }
+  }
+  engine.addSystem(readyPollSystem)
 }

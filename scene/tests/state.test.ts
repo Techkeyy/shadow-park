@@ -419,36 +419,22 @@ test('duplicate answer on current question does not double advance', () => {
 })
 
 test('permanent Shadow growth follows authoritative scale model and caps at Master (1.30)', () => {
-  // DORMANT: 0.92
-  assert.equal(personalShadowBaseScale(0), 0.92)
   // DORMANT: 0.90
   assert.equal(personalShadowBaseScale(0), 0.90)
 
-  // AWAKENED: 0.93 -> 0.98
-  assert.equal(personalShadowBaseScale(1), 0.93)
   // AWAKENED: 0.95 -> 1.04
   assert.equal(personalShadowBaseScale(1), 0.95)
   assert.ok(personalShadowBaseScale(2) > personalShadowBaseScale(1))
-  assert.equal(personalShadowBaseScale(4), 0.98)
   assert.equal(personalShadowBaseScale(4), 1.04)
 
-  // SHADE: 0.99 -> 1.06
-  assert.equal(personalShadowBaseScale(5), 0.99)
-  assert.equal(personalShadowBaseScale(9), 1.06)
   // SHADE: 1.07 -> 1.15
   assert.equal(personalShadowBaseScale(5), 1.07)
   assert.equal(personalShadowBaseScale(9), 1.15)
 
-  // WRAITH: 1.07 -> 1.15
-  assert.equal(personalShadowBaseScale(10), 1.07)
-  assert.equal(personalShadowBaseScale(17), 1.15)
   // WRAITH: 1.17 -> 1.2225
   assert.equal(personalShadowBaseScale(10), 1.17)
   assert.equal(personalShadowBaseScale(17), 1.2225)
 
-  // ECLIPSE: 1.16 -> 1.24
-  assert.equal(personalShadowBaseScale(18), 1.16)
-  assert.equal(personalShadowBaseScale(29), 1.24)
   // ECLIPSE: 1.23 -> 1.2942
   assert.equal(personalShadowBaseScale(18), 1.23)
   assert.equal(personalShadowBaseScale(29), 1.2942)
@@ -475,7 +461,6 @@ test('permanent Shadow growth follows authoritative scale model and caps at Mast
   }
   assert.equal(currentRun.lifetimeCorrect, 7)
   const reconstructedScale = personalShadowBaseScale(currentRun.lifetimeCorrect)
-  assert.ok(reconstructedScale >= 0.99 && reconstructedScale <= 1.06, `Scale at 7 correct must be SHADE level, got ${reconstructedScale}`)
   assert.ok(reconstructedScale >= 1.07 && reconstructedScale <= 1.15, `Scale at 7 correct must be SHADE level, got ${reconstructedScale}`)
 })
 

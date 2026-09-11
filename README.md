@@ -42,7 +42,7 @@ SHADOW PARK transforms trivia into spatial gameplay:
                                   │
                           NEXT QUESTION
                                   │
-                     (30 Correct / 300 Score)
+                        (30 Correct Answers)
                                   │
                                   v
                         HOUSE OF MASTERS
@@ -51,10 +51,10 @@ SHADOW PARK transforms trivia into spatial gameplay:
 1. **Read Question:** View the active trivia question on the central monument.
 2. **Step on A or B:** Walk your avatar onto the physical pad corresponding to your choice.
 3. **Authoritative Result:** The Decentraland authoritative multiplayer server evaluates the choice, emitting a clear visual and audio result (`+10` for correct, `+0` for wrong).
-4. **Score & Chain:** Correct answers add +10 to lifetime Shadow Score and increment your Chain streak. Wrong answers reset the current Chain without deducting lifetime score.
+4. **Score & Chain:** Correct answers add +10 to lifetime Shadow Score (plus streak milestone bonuses on extended chains) and increment your Chain streak. Wrong answers reset the current Chain without deducting lifetime score.
 5. **Shadow Grows:** Your Personal Shadow avatar reacts with an energy orb animation and permanently grows in scale.
 6. **Recenter:** The scene smoothly recenters the player to the neutral entrance zone, re-arming the pads for the next question.
-7. **House of Masters:** Reaching 30 correct answers (300 Shadow Score) inducts your avatar into the permanent House of Masters hall.
+7. **House of Masters:** Reaching 30 correct answers inducts your avatar into the permanent House of Masters hall.
 
 ---
 

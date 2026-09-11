@@ -1,6 +1,7 @@
 import { Color4 } from '@dcl/sdk/math'
 import ReactEcs, { Label, ReactEcsRenderer, UiEntity } from '@dcl/sdk/react-ecs'
 import type { HouseMasterRecord, ParkState } from '../shared/state'
+import { rankForLifetimeCorrect } from '../shared/state'
 import { rankProgressForCorrectCount } from './stage2-feedback'
 
 export type UiVoteState = 'UNARMED' | 'ARMED' | 'ANSWERED' | 'TRANSITIONING' | 'RECENTER_RECOVERY' | 'CENTERED' | 'VOTED'
@@ -168,8 +169,8 @@ function resultCard() {
   const headline = uiState.becameMaster ? 'MASTER' : correct ? 'CORRECT' : 'WRONG'
   const scoreDelta = correct ? `+${10 + uiState.milestoneBonus}` : '+0'
   const chainLine = correct ? `SHADOW FED • CHAIN ${uiState.currentStreak}` : uiState.chainLost ? 'CHAIN LOST' : ''
-  const authoritativeCorrect = Math.max(uiState.lifetimeCorrect, Math.floor(uiState.shadowScore / 10))
-  const rankProgress = rankProgressForCorrectCount(authoritativeCorrect)
+  const displayRank = rankForLifetimeCorrect(uiState.lifetimeCorrect)
+  const rankProgress = rankProgressForCorrectCount(uiState.lifetimeCorrect)
   const progressLine = rankProgress.nextRank ? `${rankProgress.current} / ${rankProgress.target} TO ${rankProgress.nextRank}` : 'MASTER • KEEP FEEDING'
 
   return (
@@ -223,7 +224,7 @@ function resultCard() {
         </UiEntity>
       )}
       <UiEntity uiTransform={{ margin: { top: 6 } }}>
-        <Label value={`SHADOW SCORE ${uiState.shadowScore}  •  ${uiState.shadowRank}`} color={paleText} fontSize={15} textAlign="middle-center" />
+        <Label value={`SHADOW SCORE ${uiState.shadowScore}  •  ${displayRank}`} color={paleText} fontSize={15} textAlign="middle-center" />
       </UiEntity>
       <UiEntity uiTransform={{ margin: { top: 2 } }}>
         <Label value={progressLine} color={mutedText} fontSize={12} textAlign="middle-center" />
@@ -242,36 +243,36 @@ function resultCard() {
 
 function progressionHud() {
   if (!uiState.hydrated) return null
-  const authoritativeCorrect = Math.max(uiState.lifetimeCorrect, Math.floor(uiState.shadowScore / 10))
-  const rankProgress = rankProgressForCorrectCount(authoritativeCorrect)
+  const displayRank = rankForLifetimeCorrect(uiState.lifetimeCorrect)
+  const rankProgress = rankProgressForCorrectCount(uiState.lifetimeCorrect)
   const progressLine = rankProgress.nextRank ? `${rankProgress.current} / ${rankProgress.target} TO ${rankProgress.nextRank}` : 'MASTER • KEEP FEEDING'
   return (
     <UiEntity
       uiTransform={{
         positionType: 'absolute',
-        position: { top: '3%', left: '4%' },
-        padding: '9px 13px',
-        borderRadius: 10,
+        position: { top: '1.5%', left: '1.5%' },
+        padding: '5px 8px',
+        borderRadius: 8,
         flexDirection: 'column',
         alignItems: 'flex-start'
       }}
-      uiBackground={{ color: Color4.create(0.015, 0.02, 0.06, 0.9) }}
+      uiBackground={{ color: Color4.create(0.015, 0.02, 0.06, 0.92) }}
     >
-      <UiEntity uiTransform={{ margin: { bottom: 3 } }}>
-        <Label value={`SHADOW SCORE ${uiState.shadowScore}`} color={paleText} fontSize={17} />
+      <UiEntity uiTransform={{ margin: { bottom: 2 } }}>
+        <Label value={`SHADOW SCORE ${uiState.shadowScore}`} color={paleText} fontSize={15} />
       </UiEntity>
-      <UiEntity uiTransform={{ margin: { bottom: 3 } }}>
-        <Label value={`CHAIN ${uiState.currentStreak}`} color={uiState.currentStreak >= 5 ? warmText : shadowBlue} fontSize={14} />
+      <UiEntity uiTransform={{ margin: { bottom: 2 } }}>
+        <Label value={`CHAIN ${uiState.currentStreak}`} color={uiState.currentStreak >= 5 ? warmText : shadowBlue} fontSize={13} />
       </UiEntity>
-      <UiEntity uiTransform={{ margin: { bottom: 3 } }}>
-        <Label value={uiState.shadowRank} color={shadowPurple} fontSize={14} />
+      <UiEntity uiTransform={{ margin: { bottom: 2 } }}>
+        <Label value={displayRank} color={shadowPurple} fontSize={13} />
       </UiEntity>
       {uiState.shadowGrewActive && (
-        <UiEntity uiTransform={{ margin: { bottom: 3 } }}>
-          <Label value="✦ +SHADOW POWER" color={warmText} fontSize={12} />
+        <UiEntity uiTransform={{ margin: { bottom: 2 } }}>
+          <Label value="✦ +SHADOW POWER" color={warmText} fontSize={11} />
         </UiEntity>
       )}
-      <UiEntity uiTransform={{ margin: { bottom: 3 } }}>
+      <UiEntity uiTransform={{ margin: { bottom: 2 } }}>
         <Label value={progressLine} color={mutedText} fontSize={11} />
       </UiEntity>
       {uiState.bestStreak > 0 && (
@@ -384,6 +385,8 @@ export function updateUi(next: Partial<ParkUiState>) {
 }
 
 export function updateUiFromState(state: ParkState) {
+  const run = state.run
+  const derivedRank = run?.lifetimeCorrect !== undefined ? rankForLifetimeCorrect(run.lifetimeCorrect) : (run?.shadowRank ?? uiState.shadowRank)
   updateUi({
     question: state.question,
     choiceA: state.choiceA,
@@ -396,7 +399,7 @@ export function updateUiFromState(state: ParkState) {
     shadowScore: state.run?.shadowScore ?? uiState.shadowScore,
     currentStreak: state.run?.currentStreak ?? uiState.currentStreak,
     bestStreak: state.run?.bestStreak ?? uiState.bestStreak,
-    shadowRank: state.run?.shadowRank ?? uiState.shadowRank,
+    shadowRank: derivedRank,
     masterStars: state.run?.masterStars ?? uiState.masterStars,
     lifetimeAnswered: state.run?.lifetimeAnswered ?? uiState.lifetimeAnswered,
     lifetimeCorrect: state.run?.lifetimeCorrect ?? uiState.lifetimeCorrect,

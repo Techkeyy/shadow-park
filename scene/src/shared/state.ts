@@ -359,6 +359,7 @@ export function answerQuestion(run: PlayerRun, question: QuizQuestion, choice: C
   const nextQuestionId = nextOrder[nextCursor] ?? QUIZ_QUESTIONS[0].questionId
   const nextRank = rankForLifetimeCorrect(lifetimeCorrect)
   const nextStars = masterStarsForLifetimeCorrect(lifetimeCorrect)
+  const nextScore = run.shadowScore + (correct ? 10 + bonus : 0)
   const nextRun: PlayerRun = {
     ...run,
     questionIds: nextOrder,
@@ -367,8 +368,8 @@ export function answerQuestion(run: PlayerRun, question: QuizQuestion, choice: C
     questionDeckVersion: QUESTION_BANK_VERSION,
     questionCycle: nextCycle,
     questionCursor: nextCursor,
-    score: run.shadowScore + (correct ? 10 + bonus : 0),
-    shadowScore: run.shadowScore + (correct ? 10 + bonus : 0),
+    score: nextScore,
+    shadowScore: nextScore,
     lifetimeAnswered: run.lifetimeAnswered + 1,
     lifetimeCorrect,
     currentStreak,
@@ -518,6 +519,8 @@ function parseRun(value: unknown): PlayerRun | null {
   const lifetimeCorrect = typeof candidate.lifetimeCorrect === 'number' ? candidate.lifetimeCorrect : typeof candidate.correctCount === 'number' ? candidate.correctCount : 0
   const lifetimeAnswered = typeof candidate.lifetimeAnswered === 'number' ? candidate.lifetimeAnswered : answeredQuestionIds.length
   const currentQuestionId = typeof candidate.currentQuestionId === 'string' && questionById(candidate.currentQuestionId) ? candidate.currentQuestionId : migrated.questionIds[Math.min(typeof candidate.currentQuestionIndex === 'number' ? candidate.currentQuestionIndex : 0, migrated.questionIds.length - 1)]
+  const score = typeof candidate.shadowScore === 'number' ? candidate.shadowScore : typeof candidate.score === 'number' ? candidate.score : 0
+  const shadowScore = typeof candidate.shadowScore === 'number' ? candidate.shadowScore : typeof candidate.score === 'number' ? candidate.score : 0
   const run: PlayerRun = {
     ...migrated,
     ...candidate,
@@ -527,17 +530,17 @@ function parseRun(value: unknown): PlayerRun | null {
     questionDeckVersion: QUESTION_BANK_VERSION,
     questionCycle: typeof candidate.questionCycle === 'number' ? candidate.questionCycle : 0,
     questionCursor: typeof candidate.questionCursor === 'number' ? candidate.questionCursor : 0,
-    score: typeof candidate.shadowScore === 'number' ? candidate.shadowScore : typeof candidate.score === 'number' ? candidate.score : 0,
-    shadowScore: typeof candidate.shadowScore === 'number' ? candidate.shadowScore : typeof candidate.score === 'number' ? candidate.score : 0,
+    score,
+    shadowScore,
     lifetimeAnswered,
     lifetimeCorrect,
     currentStreak: typeof candidate.currentStreak === 'number' ? candidate.currentStreak : 0,
     bestStreak: typeof candidate.bestStreak === 'number' ? candidate.bestStreak : 0,
-    shadowRank: typeof candidate.shadowRank === 'string' ? candidate.shadowRank as ShadowRank : rankForLifetimeCorrect(lifetimeCorrect),
-    masterStars: typeof candidate.masterStars === 'number' ? candidate.masterStars : masterStarsForLifetimeCorrect(lifetimeCorrect),
+    shadowRank: rankForLifetimeCorrect(lifetimeCorrect),
+    masterStars: masterStarsForLifetimeCorrect(lifetimeCorrect),
     correctCount: lifetimeCorrect,
     answeredQuestionIds,
-    shadowLevel: typeof candidate.shadowLevel === 'number' ? candidate.shadowLevel : shadowLevelForCorrectCount(lifetimeCorrect),
+    shadowLevel: shadowLevelForCorrectCount(lifetimeCorrect),
     completed: false,
     currentDisplay: undefined,
     updatedAt: typeof candidate.updatedAt === 'string' ? candidate.updatedAt : new Date().toISOString()

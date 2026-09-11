@@ -225,42 +225,59 @@ function createLandscaping() {
   const violet = Color4.create(0.28, 0.18, 0.46, 1)
   const teal = Color4.create(0.08, 0.28, 0.34, 1)
   const path = Color4.create(0.055, 0.075, 0.14, 1)
-  const moon = Color4.create(0.96, 0.84, 0.58, 1)
   const stoneColor = Color4.create(0.08, 0.06, 0.16, 1)
-  const lanternGlow = Color4.create(0.72, 0.55, 1, 0.9)
+  const curbColor = Color4.create(0.14, 0.12, 0.24, 1)
+  const paverColor = Color4.create(0.18, 0.2, 0.32, 1)
+  const hedgeColor = Color4.create(0.06, 0.16, 0.18, 1)
+  const lanternGlow = Color4.create(1, 0.78, 0.42, 1)
+  const runeGlow = Color4.create(0.72, 0.45, 1, 1)
 
-  // A. Entrance Arrival — Twin Lantern Pillars framing the entrance promenade
-  const leftPillar = cylinder(Vector3.create(6.4, 0.9, 1.35), Vector3.create(0.26, 1.8, 0.26), stoneColor, 0.5, 0.45)
-  const leftLantern = sphere(Vector3.create(6.4, 1.88, 1.35), Vector3.create(0.36, 0.38, 0.36), lanternGlow)
-  Material.setPbrMaterial(leftLantern, { albedoColor: lanternGlow, emissiveColor: lanternGlow, emissiveIntensity: 2.2, roughness: 0.6, metallic: 0 })
+  // 1. Grand Park Entrance Gateway & Arch
+  const leftCol = cylinder(Vector3.create(6.1, 1.4, 1.25), Vector3.create(0.36, 2.8, 0.36), stoneColor, 0.5, 0.45)
+  const rightCol = cylinder(Vector3.create(9.9, 1.4, 1.25), Vector3.create(0.36, 2.8, 0.36), stoneColor, 0.5, 0.45)
+  const archBeam = box(Vector3.create(8.0, 2.75, 1.25), Vector3.create(4.4, 0.32, 0.45), stoneColor)
+  const runeEmblem = box(Vector3.create(8.0, 2.82, 1.02), Vector3.create(0.75, 0.24, 0.12), runeGlow)
+  Material.setPbrMaterial(runeEmblem, { albedoColor: runeGlow, emissiveColor: runeGlow, emissiveIntensity: 2.5, roughness: 0.5, metallic: 0 })
 
-  const rightPillar = cylinder(Vector3.create(9.6, 0.9, 1.35), Vector3.create(0.26, 1.8, 0.26), stoneColor, 0.5, 0.45)
-  const rightLantern = sphere(Vector3.create(9.6, 1.88, 1.35), Vector3.create(0.36, 0.38, 0.36), lanternGlow)
-  Material.setPbrMaterial(rightLantern, { albedoColor: lanternGlow, emissiveColor: lanternGlow, emissiveIntensity: 2.2, roughness: 0.6, metallic: 0 })
+  // Flanking entrance boundary walls
+  box(Vector3.create(4.2, 0.5, 1.25), Vector3.create(3.0, 1.0, 0.32), stoneColor)
+  box(Vector3.create(11.8, 0.5, 1.25), Vector3.create(3.0, 1.0, 0.32), stoneColor)
 
-  // Entrance path curbs
-  box(Vector3.create(6.72, 0.07, 3.55), Vector3.create(0.12, 0.06, 4.2), stoneColor)
-  box(Vector3.create(9.28, 0.07, 3.55), Vector3.create(0.12, 0.06, 4.2), stoneColor)
+  // Hanging entrance lanterns
+  const leftLantern = sphere(Vector3.create(6.1, 2.1, 1.25), Vector3.create(0.34, 0.36, 0.34), lanternGlow)
+  Material.setPbrMaterial(leftLantern, { albedoColor: lanternGlow, emissiveColor: lanternGlow, emissiveIntensity: 3.0, roughness: 0.4, metallic: 0 })
+  const rightLantern = sphere(Vector3.create(9.9, 2.1, 1.25), Vector3.create(0.34, 0.36, 0.34), lanternGlow)
+  Material.setPbrMaterial(rightLantern, { albedoColor: lanternGlow, emissiveColor: lanternGlow, emissiveIntensity: 3.0, roughness: 0.4, metallic: 0 })
 
-  // A restrained central promenade gives the scene a readable arrival rhythm.
-  box(Vector3.create(8, 0.055, 3.55), Vector3.create(2.35, 0.05, 4.15), path)
-  for (const z of [2.35, 3.55, 4.75]) {
-    box(Vector3.create(8, 0.09, z), Vector3.create(1.18, 0.035, 0.2), Color4.create(0.2, 0.24, 0.38, 1))
+  // 2. Central Promenade & Path System
+  box(Vector3.create(8, 0.03, 3.65), Vector3.create(2.7, 0.04, 4.4), path)
+  box(Vector3.create(6.6, 0.07, 3.65), Vector3.create(0.14, 0.06, 4.4), curbColor)
+  box(Vector3.create(9.4, 0.07, 3.65), Vector3.create(0.14, 0.06, 4.4), curbColor)
+
+  for (const z of [1.9, 2.9, 3.9, 4.9]) {
+    box(Vector3.create(8, 0.065, z), Vector3.create(1.6, 0.025, 0.6), paverColor)
   }
 
-  // Two low branch paths make the choice legible from the stationary spawn.
+  // Symmetrical ornamental hedges flanking promenade
+  box(Vector3.create(5.8, 0.22, 3.65), Vector3.create(0.4, 0.4, 3.8), hedgeColor)
+  box(Vector3.create(10.2, 0.22, 3.65), Vector3.create(0.4, 0.4, 3.8), hedgeColor)
+
+  // 3. Central Quiz Plaza Framing & Paths
+  box(Vector3.create(8, 0.025, 8.2), Vector3.create(11.4, 0.03, 7.6), Color4.create(0.035, 0.05, 0.11, 1))
+
+  // Branching stone paths from promenade to choice destinations
   const forkPath = (choice: Choice, endX: number) => {
     const startX = 8
-    const startZ = 5.35
+    const startZ = 5.4
     const endZ = CHOICE_A_ZONE.centerZ
     const dx = endX - startX
     const dz = endZ - startZ
     const yaw = Math.atan2(dx, dz) * 180 / Math.PI
     const color = choice === 'A' ? Color4.create(0.24, 0.14, 0.46, 1) : Color4.create(0.06, 0.3, 0.38, 1)
-    for (const t of [0.28, 0.54, 0.8]) {
+    for (const t of [0.25, 0.52, 0.78]) {
       box(
-        Vector3.create(startX + dx * t, 0.095, startZ + dz * t),
-        Vector3.create(1.15, 0.04, 1.55),
+        Vector3.create(startX + dx * t, 0.065, startZ + dz * t),
+        Vector3.create(1.2, 0.025, 1.4),
         color,
         Quaternion.fromEulerDegrees(0, yaw, 0)
       )
@@ -269,20 +286,40 @@ function createLandscaping() {
   forkPath('A', CHOICE_A_ZONE.centerX)
   forkPath('B', CHOICE_B_ZONE.centerX)
 
-  // B. Park details — Restful stone benches along perimeter outside walking corridors
-  box(Vector3.create(3.1, 0.22, 4.2), Vector3.create(1.5, 0.2, 0.55), stoneColor)
-  box(Vector3.create(3.1, 0.45, 4.45), Vector3.create(1.5, 0.25, 0.12), stoneColor)
+  // Connecting Garden Path to House of Masters
+  for (const [px, pz] of [[6.4, 7.6], [5.2, 8.8], [4.0, 10.0], [2.8, 11.0]] as Array<[number, number]>) {
+    box(Vector3.create(px, 0.06, pz), Vector3.create(1.1, 0.025, 1.1), paverColor)
+  }
 
-  box(Vector3.create(12.9, 0.22, 4.2), Vector3.create(1.5, 0.2, 0.55), stoneColor)
-  box(Vector3.create(12.9, 0.45, 4.45), Vector3.create(1.5, 0.25, 0.12), stoneColor)
+  // 4. Plaza Perimeter Light Bollards with Glowing Crystals
+  const bollardPositions = [
+    Vector3.create(3.8, 0.4, 5.8),
+    Vector3.create(12.2, 0.4, 5.8),
+    Vector3.create(3.8, 0.4, 10.8),
+    Vector3.create(12.2, 0.4, 10.8)
+  ]
+  for (const bPos of bollardPositions) {
+    cylinder(bPos, Vector3.create(0.2, 0.8, 0.2), stoneColor, 0.5, 0.45)
+    const crystal = sphere(Vector3.create(bPos.x, 0.88, bPos.z), Vector3.create(0.22, 0.28, 0.22), runeGlow)
+    Material.setPbrMaterial(crystal, { albedoColor: runeGlow, emissiveColor: runeGlow, emissiveIntensity: 2.2, roughness: 0.5, metallic: 0 })
+  }
 
-  // Lightweight tree silhouettes add a haunted-garden canopy without heavy assets
+  // 5. Park Benches with backrests
+  box(Vector3.create(2.8, 0.2, 4.6), Vector3.create(1.6, 0.2, 0.55), stoneColor)
+  box(Vector3.create(2.8, 0.45, 4.85), Vector3.create(1.6, 0.3, 0.12), stoneColor)
+
+  box(Vector3.create(13.2, 0.2, 4.6), Vector3.create(1.6, 0.2, 0.55), stoneColor)
+  box(Vector3.create(13.2, 0.45, 4.85), Vector3.create(1.6, 0.3, 0.12), stoneColor)
+
+  // 6. Symmetrical Sculpted Garden Trees
   for (const [x, z, canopy] of [
-    [2.0, 2.2, violet], [14.0, 2.2, teal], [2.0, 9.8, violet], [14.0, 9.8, teal]
+    [1.8, 2.4, violet], [14.2, 2.4, teal],
+    [1.8, 7.8, violet], [14.2, 7.8, teal],
+    [14.2, 12.8, teal]
   ] as Array<[number, number, Color4]>) {
     cylinder(Vector3.create(x, 0.7, z), Vector3.create(0.22, 1.4, 0.22), Color4.create(0.09, 0.07, 0.12, 1), 0.55, 0.38)
-    sphere(Vector3.create(x, 1.65, z), Vector3.create(0.9, 1.05, 0.9), canopy)
-    sphere(Vector3.create(x + 0.34, 1.92, z + 0.12), Vector3.create(0.48, 0.58, 0.48), Color4.create(canopy.r * 0.7, canopy.g * 0.7, canopy.b * 0.7, 1))
+    sphere(Vector3.create(x, 1.7, z), Vector3.create(0.95, 1.15, 0.95), canopy)
+    sphere(Vector3.create(x + 0.3, 2.0, z + 0.1), Vector3.create(0.5, 0.6, 0.5), Color4.create(canopy.r * 0.7, canopy.g * 0.7, canopy.b * 0.7, 1))
   }
 }
 
@@ -360,23 +397,25 @@ export function createPresentationV2() {
   Material.setPbrMaterial(personalPedestalGlow, { albedoColor: Color4.create(0.42, 0.16, 0.48, 1), emissiveColor: Color4.create(0.55, 0.2, 0.65, 1), emissiveIntensity: 1.2, roughness: 0.72, metallic: 0 })
   createLandscaping()
 
-  // Background Music — Single persistent AudioSource at the central quiz plaza
+  // Background Music — Lively continuous ambient soundtrack with global delivery
   const musicEntity = engine.addEntity()
   Transform.create(musicEntity, { position: Vector3.create(8, 1.2, 8) })
   AudioSource.create(musicEntity, {
     audioClipUrl: 'assets/scene/shadow-garden-theme.mp3',
     playing: true,
     loop: true,
-    volume: 0.70
+    volume: 0.85,
+    global: true
   })
 
+  // SFX Cue Channel — Global playback for crisp chime, correct, wrong, and rank cues
   const audioEntity = engine.addEntity()
   Transform.create(audioEntity, { position: Vector3.create(8, 1.1, 8) })
   AudioSource.create(audioEntity, {
     audioClipUrl: 'assets/scene/shadow-correct.wav',
     playing: false,
     loop: false,
-    volume: 0.52,
+    volume: 1.0,
     global: true
   })
   return audioEntity

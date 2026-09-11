@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { createRequire } from 'node:module'
+import { QUESTION_BANK } from '../src/shared/question-bank.ts'
 
 const require = createRequire(import.meta.url)
 const { PNG } = require('pngjs')
@@ -245,11 +246,34 @@ function houseTexture() {
   fs.writeFileSync(path.join(outputDir, 'house-of-masters.png'), PNG.sync.write(png, { deflateLevel: 1 }))
 }
 
-const { QUESTION_BANK } = await import('../src/shared/question-bank.ts')
+function welcomeTexture() {
+  const png = new PNG({ width: 1024, height: 512 })
+  rect(png, 0, 0, png.width, png.height, rgba('#08061A'))
+  rect(png, 20, 20, 984, 472, rgba('#120E2E'))
+  outline(png, 20, 20, 984, 472, rgba('#8C7BDA'), 8)
+  outline(png, 32, 32, 960, 448, rgba('#4D3D8A'), 3)
+  
+  // Top line: WELCOME TO
+  centeredHeavy(png, 'WELCOME TO', 80, 7, rgba('#C8B8FF'))
+  rect(png, 120, 175, 784, 4, rgba('#8C7BDA'))
+  
+  // Bottom line: SHADOW PARK
+  centeredHeavy(png, 'SHADOW PARK', 230, 13, rgba('#FFFFFF'))
+  rect(png, 120, 400, 784, 4, rgba('#8C7BDA'))
+  centeredHeavy(png, 'ENTER AND ANSWER WITH YOUR FEET', 430, 4, rgba('#FFD868'))
+  
+  fs.writeFileSync(path.join(outputDir, 'welcome-shadow-park.png'), PNG.sync.write(png, { deflateLevel: 1 }))
+}
 
 if (process.argv.includes('--house-only')) {
   houseTexture()
   console.log('Generated House of Masters plaque in ' + outputDir)
+  process.exit(0)
+}
+
+if (process.argv.includes('--welcome-only')) {
+  welcomeTexture()
+  console.log('Generated Welcome to Shadow Park sign in ' + outputDir)
   process.exit(0)
 }
 
@@ -263,4 +287,5 @@ QUESTION_BANK.forEach(({ questionText, answerA, answerB }, index) => {
 })
 houseTexture()
 completionTexture()
+welcomeTexture()
 console.log('Generated all ultra-readable high-contrast sign textures in ' + outputDir)

@@ -224,51 +224,60 @@ function createDestination(choice: Choice) {
 function createLandscaping() {
   const violet = Color4.create(0.28, 0.18, 0.46, 1)
   const teal = Color4.create(0.08, 0.28, 0.34, 1)
-  const path = Color4.create(0.055, 0.075, 0.14, 1)
-  const stoneColor = Color4.create(0.08, 0.06, 0.16, 1)
-  const curbColor = Color4.create(0.14, 0.12, 0.24, 1)
-  const paverColor = Color4.create(0.18, 0.2, 0.32, 1)
+  const path = Color4.create(0.28, 0.30, 0.36, 1)
+  const stoneColor = Color4.create(0.16, 0.14, 0.22, 1)
+  const curbColor = Color4.create(0.13, 0.14, 0.18, 1)
+  const paverColor = Color4.create(0.38, 0.42, 0.48, 1)
   const hedgeColor = Color4.create(0.06, 0.16, 0.18, 1)
   const lanternGlow = Color4.create(1, 0.78, 0.42, 1)
   const runeGlow = Color4.create(0.72, 0.45, 1, 1)
 
-  // 1. Grand Park Entrance Gateway & Arch
-  const leftCol = cylinder(Vector3.create(6.1, 1.4, 1.25), Vector3.create(0.36, 2.8, 0.36), stoneColor, 0.5, 0.45)
-  const rightCol = cylinder(Vector3.create(9.9, 1.4, 1.25), Vector3.create(0.36, 2.8, 0.36), stoneColor, 0.5, 0.45)
-  const archBeam = box(Vector3.create(8.0, 2.75, 1.25), Vector3.create(4.4, 0.32, 0.45), stoneColor)
-  const runeEmblem = box(Vector3.create(8.0, 2.82, 1.02), Vector3.create(0.75, 0.24, 0.12), runeGlow)
+  // 1. Grand Park Entrance Gateway & Arch (Shifted toward spawn, widened, raised)
+  const gateZ = 0.85
+  const leftColX = 5.4
+  const rightColX = 10.6
+  const pillarHeight = 3.4
+  const lintelY = 3.35
+
+  const leftCol = cylinder(Vector3.create(leftColX, pillarHeight / 2, gateZ), Vector3.create(0.38, pillarHeight, 0.38), stoneColor, 0.5, 0.45)
+  const rightCol = cylinder(Vector3.create(rightColX, pillarHeight / 2, gateZ), Vector3.create(0.38, pillarHeight, 0.38), stoneColor, 0.5, 0.45)
+  const archBeam = box(Vector3.create(8.0, lintelY, gateZ), Vector3.create(5.6, 0.35, 0.45), stoneColor)
+  const runeEmblem = box(Vector3.create(8.0, lintelY + 0.07, gateZ - 0.23), Vector3.create(0.75, 0.24, 0.12), runeGlow)
   Material.setPbrMaterial(runeEmblem, { albedoColor: runeGlow, emissiveColor: runeGlow, emissiveIntensity: 2.5, roughness: 0.5, metallic: 0 })
 
   // Flanking entrance boundary walls
-  box(Vector3.create(4.2, 0.5, 1.25), Vector3.create(3.0, 1.0, 0.32), stoneColor)
-  box(Vector3.create(11.8, 0.5, 1.25), Vector3.create(3.0, 1.0, 0.32), stoneColor)
+  box(Vector3.create(3.1, 0.6, gateZ), Vector3.create(4.2, 1.2, 0.32), stoneColor)
+  box(Vector3.create(12.9, 0.6, gateZ), Vector3.create(4.2, 1.2, 0.32), stoneColor)
 
   // Hanging entrance lanterns
-  const leftLantern = sphere(Vector3.create(6.1, 2.1, 1.25), Vector3.create(0.34, 0.36, 0.34), lanternGlow)
+  const leftLantern = sphere(Vector3.create(leftColX, 2.7, gateZ), Vector3.create(0.34, 0.36, 0.34), lanternGlow)
   Material.setPbrMaterial(leftLantern, { albedoColor: lanternGlow, emissiveColor: lanternGlow, emissiveIntensity: 3.0, roughness: 0.4, metallic: 0 })
-  const rightLantern = sphere(Vector3.create(9.9, 2.1, 1.25), Vector3.create(0.34, 0.36, 0.34), lanternGlow)
+  const rightLantern = sphere(Vector3.create(rightColX, 2.7, gateZ), Vector3.create(0.34, 0.36, 0.34), lanternGlow)
   Material.setPbrMaterial(rightLantern, { albedoColor: lanternGlow, emissiveColor: lanternGlow, emissiveIntensity: 3.0, roughness: 0.4, metallic: 0 })
 
-  // 2. Central Promenade & Path System
-  box(Vector3.create(8, 0.03, 3.65), Vector3.create(2.7, 0.04, 4.4), path)
-  box(Vector3.create(6.6, 0.07, 3.65), Vector3.create(0.14, 0.06, 4.4), curbColor)
-  box(Vector3.create(9.4, 0.07, 3.65), Vector3.create(0.14, 0.06, 4.4), curbColor)
+  // Outer Entrance Welcome Sign: "WELCOME TO SHADOW PARK" (facing spawn with clean dark rear backing)
+  const signY = 4.05
+  box(Vector3.create(8.0, signY, gateZ), Vector3.create(3.4, 1.2, 0.24), stoneColor)
+  box(Vector3.create(8.0, signY, gateZ + 0.13), Vector3.create(3.45, 1.25, 0.04), Color4.create(0.08, 0.07, 0.12, 1))
+  texturedPlane('assets/scene/signs/welcome-shadow-park.png', Vector3.create(8.0, signY, gateZ - 0.125), Vector3.create(3.2, 1.05, 1))
 
-  for (const z of [1.9, 2.9, 3.9, 4.9]) {
-    box(Vector3.create(8, 0.065, z), Vector3.create(1.6, 0.025, 0.6), paverColor)
+  // 2. Extended Central Promenade & Approach Path (Spawn -> Gate -> Quiz Plaza)
+  box(Vector3.create(8, 0.035, 2.5), Vector3.create(2.8, 0.05, 4.6), path)
+  box(Vector3.create(6.52, 0.08, 2.5), Vector3.create(0.16, 0.08, 4.6), curbColor)
+  box(Vector3.create(9.48, 0.08, 2.5), Vector3.create(0.16, 0.08, 4.6), curbColor)
+
+  for (const z of [0.6, 1.4, 2.2, 3.0, 3.8, 4.6]) {
+    box(Vector3.create(8, 0.065, z), Vector3.create(1.8, 0.025, 0.55), paverColor)
   }
 
-  // Symmetrical ornamental hedges flanking promenade
-  box(Vector3.create(5.8, 0.22, 3.65), Vector3.create(0.4, 0.4, 3.8), hedgeColor)
-  box(Vector3.create(10.2, 0.22, 3.65), Vector3.create(0.4, 0.4, 3.8), hedgeColor)
-
-  // 3. Central Quiz Plaza Framing & Paths
-  box(Vector3.create(8, 0.025, 8.2), Vector3.create(11.4, 0.03, 7.6), Color4.create(0.035, 0.05, 0.11, 1))
+  // Symmetrical ornamental hedges flanking promenade (clearing central corridor)
+  box(Vector3.create(5.0, 0.22, 2.8), Vector3.create(0.35, 0.4, 3.4), hedgeColor)
+  box(Vector3.create(11.0, 0.22, 2.8), Vector3.create(0.35, 0.4, 3.4), hedgeColor)
 
   // Branching stone paths from promenade to choice destinations
   const forkPath = (choice: Choice, endX: number) => {
     const startX = 8
-    const startZ = 5.4
+    const startZ = 5.2
     const endZ = CHOICE_A_ZONE.centerZ
     const dx = endX - startX
     const dz = endZ - startZ
@@ -288,15 +297,15 @@ function createLandscaping() {
 
   // Connecting Garden Path to House of Masters
   for (const [px, pz] of [[6.4, 7.6], [5.2, 8.8], [4.0, 10.0], [2.8, 11.0]] as Array<[number, number]>) {
-    box(Vector3.create(px, 0.06, pz), Vector3.create(1.1, 0.025, 1.1), paverColor)
+    box(Vector3.create(px, 0.065, pz), Vector3.create(1.1, 0.025, 1.1), paverColor)
   }
 
-  // 4. Plaza Perimeter Light Bollards with Glowing Crystals
+  // 4. Plaza Perimeter Light Bollards (Pushed outward to clear A/B and Quiz sightlines)
   const bollardPositions = [
-    Vector3.create(3.8, 0.4, 5.8),
-    Vector3.create(12.2, 0.4, 5.8),
-    Vector3.create(3.8, 0.4, 10.8),
-    Vector3.create(12.2, 0.4, 10.8)
+    Vector3.create(1.9, 0.4, 4.8),
+    Vector3.create(14.1, 0.4, 4.8),
+    Vector3.create(1.9, 0.4, 11.2),
+    Vector3.create(14.1, 0.4, 11.2)
   ]
   for (const bPos of bollardPositions) {
     cylinder(bPos, Vector3.create(0.2, 0.8, 0.2), stoneColor, 0.5, 0.45)
@@ -304,18 +313,18 @@ function createLandscaping() {
     Material.setPbrMaterial(crystal, { albedoColor: runeGlow, emissiveColor: runeGlow, emissiveIntensity: 2.2, roughness: 0.5, metallic: 0 })
   }
 
-  // 5. Park Benches with backrests
-  box(Vector3.create(2.8, 0.2, 4.6), Vector3.create(1.6, 0.2, 0.55), stoneColor)
-  box(Vector3.create(2.8, 0.45, 4.85), Vector3.create(1.6, 0.3, 0.12), stoneColor)
+  // 5. Park Benches with backrests (Perimeter aligned)
+  box(Vector3.create(1.6, 0.2, 4.6), Vector3.create(1.6, 0.2, 0.55), stoneColor)
+  box(Vector3.create(1.6, 0.45, 4.85), Vector3.create(1.6, 0.3, 0.12), stoneColor)
 
-  box(Vector3.create(13.2, 0.2, 4.6), Vector3.create(1.6, 0.2, 0.55), stoneColor)
-  box(Vector3.create(13.2, 0.45, 4.85), Vector3.create(1.6, 0.3, 0.12), stoneColor)
+  box(Vector3.create(14.4, 0.2, 4.6), Vector3.create(1.6, 0.2, 0.55), stoneColor)
+  box(Vector3.create(14.4, 0.45, 4.85), Vector3.create(1.6, 0.3, 0.12), stoneColor)
 
-  // 6. Symmetrical Sculpted Garden Trees
+  // 6. Symmetrical Sculpted Garden Trees (Moved to parcel outer boundary to clear option-board sightlines)
   for (const [x, z, canopy] of [
-    [1.8, 2.4, violet], [14.2, 2.4, teal],
-    [1.8, 7.8, violet], [14.2, 7.8, teal],
-    [14.2, 12.8, teal]
+    [1.2, 1.8, violet], [14.8, 1.8, teal],
+    [1.2, 7.8, violet], [14.8, 7.8, teal],
+    [14.8, 13.5, teal]
   ] as Array<[number, number, Color4]>) {
     cylinder(Vector3.create(x, 0.7, z), Vector3.create(0.22, 1.4, 0.22), Color4.create(0.09, 0.07, 0.12, 1), 0.55, 0.38)
     sphere(Vector3.create(x, 1.7, z), Vector3.create(0.95, 1.15, 0.95), canopy)
@@ -382,10 +391,12 @@ export function createPresentationV2() {
   choicePadBaseScales.clear()
   choicePadPulseUntil.clear()
   choicePadFlashUntil.clear()
-  const world = Color4.create(0.012, 0.018, 0.05, 1)
-  const plaza = Color4.create(0.028, 0.045, 0.1, 1)
-  box(Vector3.create(8, -0.18, 8), Vector3.create(16, 0.36, 16), world)
-  box(Vector3.create(8, 0.01, 7.8), Vector3.create(14.4, 0.08, 12.8), plaza)
+  const grass = Color4.create(0.13, 0.23, 0.14, 1)
+  const plaza = Color4.create(0.24, 0.27, 0.33, 1)
+  // Base world ground: y = -0.088, top surface at y = 0.012 (elevated above DCL native terrain y = 0.00)
+  box(Vector3.create(8, -0.088, 8), Vector3.create(16, 0.20, 16), grass)
+  // Central Quiz Plaza stone slab: y = 0.02, top surface at y = 0.04
+  box(Vector3.create(8, 0.02, 8.2), Vector3.create(11.6, 0.04, 7.8), plaza)
   createQuestionLandmark()
   createDestination('A')
   createDestination('B')
@@ -397,26 +408,30 @@ export function createPresentationV2() {
   Material.setPbrMaterial(personalPedestalGlow, { albedoColor: Color4.create(0.42, 0.16, 0.48, 1), emissiveColor: Color4.create(0.55, 0.2, 0.65, 1), emissiveIntensity: 1.2, roughness: 0.72, metallic: 0 })
   createLandscaping()
 
-  // Background Music — Lively continuous ambient soundtrack with global delivery
+  // Background Music — Persistent player-following AudioSource for seamless mobile ambient playback
   const musicEntity = engine.addEntity()
-  Transform.create(musicEntity, { position: Vector3.create(8, 1.2, 8) })
+  Transform.create(musicEntity, {
+    position: Vector3.create(0, 0, 0),
+    parent: engine.PlayerEntity
+  })
   AudioSource.create(musicEntity, {
     audioClipUrl: 'assets/scene/shadow-garden-theme.mp3',
     playing: true,
     loop: true,
-    volume: 0.85,
-    global: true
+    volume: 0.90
   })
 
-  // SFX Cue Channel — Global playback for crisp chime, correct, wrong, and rank cues
+  // SFX Cue Channel — Player-parented AudioSource for prominent chime, correct, wrong, and rank cues
   const audioEntity = engine.addEntity()
-  Transform.create(audioEntity, { position: Vector3.create(8, 1.1, 8) })
+  Transform.create(audioEntity, {
+    position: Vector3.create(0, 0, 0),
+    parent: engine.PlayerEntity
+  })
   AudioSource.create(audioEntity, {
     audioClipUrl: 'assets/scene/shadow-correct.wav',
     playing: false,
     loop: false,
-    volume: 1.0,
-    global: true
+    volume: 1.0
   })
   return audioEntity
 }

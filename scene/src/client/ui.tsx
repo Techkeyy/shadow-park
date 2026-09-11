@@ -94,17 +94,24 @@ const mutedText = Color4.create(0.72, 0.78, 0.9, 1)
 const warmText = Color4.create(1, 0.84, 0.46, 1)
 
 function helperCopy() {
-  if (!uiState.hydrated) return <Label value={uiState.startupStage || 'CONNECTING'} color={paleText} fontSize={15} textAlign="middle-center" />
+  if (!uiState.hydrated) return <Label value={uiState.startupStage || 'CONNECTING'} color={paleText} fontSize={16} textAlign="middle-center" />
   if (uiState.pendingChoice) {
     return (
-      <UiEntity uiTransform={{ flexDirection: 'column', alignItems: 'center', margin: '2px 0 0' }}>
-        <Label value="CHOICE LOCKED" color={shadowBlue} fontSize={15} textAlign="middle-center" />
-        <Label value="ANSWERING..." color={paleText} fontSize={13} textAlign="middle-center" />
+      <UiEntity uiTransform={{ flexDirection: 'column', alignItems: 'center', margin: '4px 0 0' }}>
+        <Label value="CHOICE LOCKED" color={shadowBlue} fontSize={17} textAlign="middle-center" />
+        <Label value="ANSWERING..." color={paleText} fontSize={14} textAlign="middle-center" />
       </UiEntity>
     )
   }
-  if (uiState.voteState !== 'ARMED' || !uiState.entryHintVisible) return null
-  return <Label value="STEP ON A OR B TO ANSWER" color={shadowBlue} fontSize={14} textAlign="middle-center" />
+  if (uiState.voteState !== 'ARMED') return null
+  return (
+    <UiEntity uiTransform={{ flexDirection: 'column', alignItems: 'center', padding: '4px 8px' }}>
+      <Label value="ANSWER WITH YOUR FEET" color={shadowPurple} fontSize={17} textAlign="middle-center" />
+      <UiEntity uiTransform={{ margin: { top: 3 } }}>
+        <Label value="Step onto A or B to answer." color={paleText} fontSize={14} textAlign="middle-center" />
+      </UiEntity>
+    </UiEntity>
+  )
 }
 
 function feedbackCopy() {
@@ -127,18 +134,31 @@ function resultCopy() {
   if (!uiState.hydrated || !uiState.answerFeedback) return null
   const correct = uiState.answerFeedback.startsWith('CORRECT')
   const headline = uiState.becameMaster ? 'MASTER' : correct ? 'CORRECT' : 'WRONG'
-  const scoreDelta = correct ? `+${10 + uiState.milestoneBonus} SHADOW SCORE` : '+0 SHADOW SCORE'
+  const scoreDelta = correct ? `+${10 + uiState.milestoneBonus} SHADOW SCORE` : '+0'
   const chainLine = correct ? `SHADOW FED • CHAIN ${uiState.currentStreak}` : uiState.chainLost ? 'CHAIN LOST' : ''
   const authoritativeCorrect = Math.max(uiState.lifetimeCorrect, Math.floor(uiState.shadowScore / 10))
   const rankProgress = rankProgressForCorrectCount(authoritativeCorrect)
   const progressLine = rankProgress.nextRank ? `${rankProgress.current} / ${rankProgress.target} TO ${rankProgress.nextRank}` : 'MASTER • KEEP FEEDING'
   return (
-    <UiEntity uiTransform={{ flexDirection: 'column', alignItems: 'center', margin: '8px 0 0', padding: '8px 12px' }}>
-      <Label value={headline} color={uiState.becameMaster ? shadowPurple : correct ? shadowBlue : warmText} fontSize={26} textAlign="middle-center" />
-      <Label value={scoreDelta} color={correct ? shadowBlue : mutedText} fontSize={16} textAlign="middle-center" />
+    <UiEntity
+      uiTransform={{
+        flexDirection: 'column',
+        alignItems: 'center',
+        margin: '6px 0 0',
+        padding: '12px 18px',
+        borderRadius: 10
+      }}
+      uiBackground={{ color: correct ? Color4.create(0.04, 0.14, 0.24, 0.92) : Color4.create(0.22, 0.05, 0.07, 0.92) }}
+    >
+      <Label value={headline} color={uiState.becameMaster ? shadowPurple : correct ? Color4.create(0.25, 1, 0.7, 1) : Color4.create(1, 0.38, 0.38, 1)} fontSize={30} textAlign="middle-center" />
+      <UiEntity uiTransform={{ margin: { top: 2 } }}>
+        <Label value={scoreDelta} color={correct ? Color4.create(0.75, 0.96, 1, 1) : Color4.create(0.92, 0.72, 0.72, 1)} fontSize={19} textAlign="middle-center" />
+      </UiEntity>
       {correct && <Label value="✦ SHADOW GREW" color={warmText} fontSize={14} textAlign="middle-center" />}
       {chainLine && <Label value={chainLine} color={warmText} fontSize={13} textAlign="middle-center" />}
-      <Label value={`SHADOW SCORE ${uiState.shadowScore}`} color={paleText} fontSize={17} textAlign="middle-center" />
+      <UiEntity uiTransform={{ margin: { top: 4 } }}>
+        <Label value={`SHADOW SCORE ${uiState.shadowScore}`} color={paleText} fontSize={16} textAlign="middle-center" />
+      </UiEntity>
       <Label value={uiState.shadowRank} color={shadowPurple} fontSize={14} textAlign="middle-center" />
       <Label value={progressLine} color={mutedText} fontSize={12} textAlign="middle-center" />
       {uiState.answerFeedback.startsWith('NOT THIS TIME') && uiState.correctAnswer && <Label value={`CORRECT ANSWER: ${uiState.correctAnswer}`} color={paleText} fontSize={12} textAlign="middle-center" />}
@@ -216,23 +236,23 @@ function rankUpPanel() {
 function helperPanel() {
   const feedback = feedbackCopy()
   const showLoading = !uiState.hydrated
-  const showHint = uiState.hydrated && uiState.voteState === 'ARMED' && uiState.entryHintVisible
+  const showHint = uiState.hydrated && uiState.voteState === 'ARMED'
   const showResult = uiState.hydrated && Boolean(uiState.answerFeedback)
   if (!showLoading && !showHint && !showResult && !feedback && !uiState.resonateStatus && !uiState.liveMoment && !uiState.hydrated) return null
   return (
     <UiEntity
       uiTransform={{
-        width: showResult ? '62%' : '34%',
+        width: showResult ? '66%' : '44%',
         positionType: 'absolute',
-        position: { top: showResult ? '10%' : '4%', left: showResult ? '19%' : '63%' },
-        padding: showResult ? '10px 12px' : '5px 8px',
+        position: { top: showResult ? '10%' : '3%', left: showResult ? '17%' : '52%' },
+        padding: showResult ? '12px 16px' : '7px 11px',
         borderRadius: 8,
         flexDirection: 'column',
         alignItems: 'center'
       }}
-      uiBackground={{ color: Color4.create(0.015, 0.02, 0.06, 0.46) }}
+      uiBackground={{ color: Color4.create(0.015, 0.02, 0.06, 0.75) }}
     >
-      {showLoading && <Label value="SHADOW PARK" color={shadowPurple} fontSize={16} textAlign="middle-center" />}
+      {showLoading && <Label value="SHADOW PARK" color={shadowPurple} fontSize={17} textAlign="middle-center" />}
       {helperCopy()}
       {resultCopy()}
       {feedback}

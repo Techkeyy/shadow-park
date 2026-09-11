@@ -226,6 +226,21 @@ function createLandscaping() {
   const teal = Color4.create(0.08, 0.28, 0.34, 1)
   const path = Color4.create(0.055, 0.075, 0.14, 1)
   const moon = Color4.create(0.96, 0.84, 0.58, 1)
+  const stoneColor = Color4.create(0.08, 0.06, 0.16, 1)
+  const lanternGlow = Color4.create(0.72, 0.55, 1, 0.9)
+
+  // A. Entrance Arrival — Twin Lantern Pillars framing the entrance promenade
+  const leftPillar = cylinder(Vector3.create(6.4, 0.9, 1.35), Vector3.create(0.26, 1.8, 0.26), stoneColor, 0.5, 0.45)
+  const leftLantern = sphere(Vector3.create(6.4, 1.88, 1.35), Vector3.create(0.36, 0.38, 0.36), lanternGlow)
+  Material.setPbrMaterial(leftLantern, { albedoColor: lanternGlow, emissiveColor: lanternGlow, emissiveIntensity: 2.2, roughness: 0.6, metallic: 0 })
+
+  const rightPillar = cylinder(Vector3.create(9.6, 0.9, 1.35), Vector3.create(0.26, 1.8, 0.26), stoneColor, 0.5, 0.45)
+  const rightLantern = sphere(Vector3.create(9.6, 1.88, 1.35), Vector3.create(0.36, 0.38, 0.36), lanternGlow)
+  Material.setPbrMaterial(rightLantern, { albedoColor: lanternGlow, emissiveColor: lanternGlow, emissiveIntensity: 2.2, roughness: 0.6, metallic: 0 })
+
+  // Entrance path curbs
+  box(Vector3.create(6.72, 0.07, 3.55), Vector3.create(0.12, 0.06, 4.2), stoneColor)
+  box(Vector3.create(9.28, 0.07, 3.55), Vector3.create(0.12, 0.06, 4.2), stoneColor)
 
   // A restrained central promenade gives the scene a readable arrival rhythm.
   box(Vector3.create(8, 0.055, 3.55), Vector3.create(2.35, 0.05, 4.15), path)
@@ -234,8 +249,6 @@ function createLandscaping() {
   }
 
   // Two low branch paths make the choice legible from the stationary spawn.
-  // They stop before the destination trigger footprints and never intersect the
-  // rear question backdrop.
   const forkPath = (choice: Choice, endX: number) => {
     const startX = 8
     const startZ = 5.35
@@ -256,8 +269,14 @@ function createLandscaping() {
   forkPath('A', CHOICE_A_ZONE.centerX)
   forkPath('B', CHOICE_B_ZONE.centerX)
 
-  // Lightweight tree silhouettes add a haunted-garden canopy without heavy
-  // assets or dense clutter on the mobile path.
+  // B. Park details — Restful stone benches along perimeter outside walking corridors
+  box(Vector3.create(3.1, 0.22, 4.2), Vector3.create(1.5, 0.2, 0.55), stoneColor)
+  box(Vector3.create(3.1, 0.45, 4.45), Vector3.create(1.5, 0.25, 0.12), stoneColor)
+
+  box(Vector3.create(12.9, 0.22, 4.2), Vector3.create(1.5, 0.2, 0.55), stoneColor)
+  box(Vector3.create(12.9, 0.45, 4.45), Vector3.create(1.5, 0.25, 0.12), stoneColor)
+
+  // Lightweight tree silhouettes add a haunted-garden canopy without heavy assets
   for (const [x, z, canopy] of [
     [2.0, 2.2, violet], [14.0, 2.2, teal], [2.0, 9.8, violet], [14.0, 9.8, teal]
   ] as Array<[number, number, Color4]>) {
@@ -340,6 +359,16 @@ export function createPresentationV2() {
   const personalPedestalGlow = cylinder(Vector3.create(PERSONAL_SHADOW_LAYOUT.platform.centerX, 0.25, PERSONAL_SHADOW_LAYOUT.platform.centerZ), Vector3.create(0.78, 0.35, 0.78), Color4.create(0.42, 0.16, 0.48, 1), 0.62, 0.5)
   Material.setPbrMaterial(personalPedestalGlow, { albedoColor: Color4.create(0.42, 0.16, 0.48, 1), emissiveColor: Color4.create(0.55, 0.2, 0.65, 1), emissiveIntensity: 1.2, roughness: 0.72, metallic: 0 })
   createLandscaping()
+
+  // Background Music — Single persistent AudioSource at the central quiz plaza
+  const musicEntity = engine.addEntity()
+  Transform.create(musicEntity, { position: Vector3.create(8, 1.2, 8) })
+  AudioSource.create(musicEntity, {
+    audioClipUrl: 'assets/scene/shadow-garden-theme.mp3',
+    playing: true,
+    loop: true,
+    volume: 0.70
+  })
 
   const audioEntity = engine.addEntity()
   Transform.create(audioEntity, { position: Vector3.create(8, 1.1, 8) })

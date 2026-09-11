@@ -377,10 +377,14 @@ function ensurePersonalShadowImpactVisuals(root: Entity) {
 
 function releaseEnergyFlight() {
   if (!energyFlight) return
-  VisibilityComponent.getMutable(energyFlight.entity).visible = false
+  if (energyFlight.entity && VisibilityComponent.has(energyFlight.entity)) {
+    VisibilityComponent.getMutable(energyFlight.entity).visible = false
+  }
   energyPool.release(energyFlight.entity)
   for (const trail of energyFlight.trails) {
-    VisibilityComponent.getMutable(trail).visible = false
+    if (trail && VisibilityComponent.has(trail)) {
+      VisibilityComponent.getMutable(trail).visible = false
+    }
     trailPool.release(trail)
   }
   energyDiagnostics.poolEntityReleased += 1
@@ -389,7 +393,7 @@ function releaseEnergyFlight() {
 
 function shadowImpactTarget(): Vector3 {
   const root = personalShadowRoot.peek()
-  const rootPosition = root ? Transform.getOrNull(root)?.position : undefined
+  const rootPosition = root && Transform.has(root) ? Transform.getOrNull(root)?.position : undefined
   const base = rootPosition ?? PERSONAL_SHADOW_POSITION
   return Vector3.create(base.x, base.y + SHADOW_IMPACT_CHEST_OFFSET, base.z + SHADOW_IMPACT_FRONT_OFFSET)
 }
@@ -413,13 +417,21 @@ export function triggerShadowEnergy(choice: Choice, rankUp = false) {
   energyDiagnostics.lastChoice = choice
   energyDiagnostics.lastOrigin = from
   energyDiagnostics.lastDestination = to
-  Transform.getMutable(entity).position = from
-  Transform.getMutable(entity).scale = Vector3.create(1, 1, 1)
-  VisibilityComponent.getMutable(entity).visible = true
+  if (Transform.has(entity)) {
+    Transform.getMutable(entity).position = from
+    Transform.getMutable(entity).scale = Vector3.create(1, 1, 1)
+  }
+  if (VisibilityComponent.has(entity)) {
+    VisibilityComponent.getMutable(entity).visible = true
+  }
   for (const trail of trails) {
-    Transform.getMutable(trail).position = from
-    Transform.getMutable(trail).scale = Vector3.create(1, 1, 1)
-    VisibilityComponent.getMutable(trail).visible = true
+    if (Transform.has(trail)) {
+      Transform.getMutable(trail).position = from
+      Transform.getMutable(trail).scale = Vector3.create(1, 1, 1)
+    }
+    if (VisibilityComponent.has(trail)) {
+      VisibilityComponent.getMutable(trail).visible = true
+    }
   }
   energyDiagnostics.entityEnabled += 1
   energyFlight = { entity, trails, from, to, startedAt: Date.now(), durationMs: ENERGY_FLIGHT_DURATION_MS, impactScale: rankUp ? 1.25 : 1.18 }
@@ -427,15 +439,21 @@ export function triggerShadowEnergy(choice: Choice, rankUp = false) {
 
 export function triggerPersonalShadowReaction(durationMs = 600, maxScale = 1.18) {
   const root = personalShadowRoot.peek()
-  if (root) {
+  if (root && Transform.has(root)) {
     pendingPersonalShadowPulse = false
     ensurePersonalShadowImpactVisuals(root)
     const now = Date.now()
     shadowImpactByRoot.set(root, { startedAt: now, durationMs, maxScale })
     shadowPulseUntil.set(root, now + durationMs)
-    if (personalShadowImpactRing) VisibilityComponent.getMutable(personalShadowImpactRing).visible = true
-    if (personalShadowImpactGlow) VisibilityComponent.getMutable(personalShadowImpactGlow).visible = true
-  } else pendingPersonalShadowPulse = true
+    if (personalShadowImpactRing && VisibilityComponent.has(personalShadowImpactRing)) {
+      VisibilityComponent.getMutable(personalShadowImpactRing).visible = true
+    }
+    if (personalShadowImpactGlow && VisibilityComponent.has(personalShadowImpactGlow)) {
+      VisibilityComponent.getMutable(personalShadowImpactGlow).visible = true
+    }
+  } else {
+    pendingPersonalShadowPulse = true
+  }
 }
 
 export function queuePersonalShadowReaction() {
@@ -465,7 +483,13 @@ export function updateQuestionSurface(state: ParkState) {
   }
 }
 
-export function createShadowVisual(shadow: ShadowRecord, sideIndex = shadow.slot, positionOverride?: Vector3, rootOverride?: Entity) {
+export function createShadowVisual(
+  shadow: ShadowRecord,
+  sideIndex = shadow.slot,
+  positionOverride?: Vector3,
+  rootOverride?: Entity,
+  extraEntityCollector?: Entity[]
+) {
   const zone = zoneForChoice(shadow.choice)
   // Historical Shadows are passed an explicit Hall-grid position by the
   // runtime; Personal Shadow uses its dedicated plaza pedestal position.
@@ -646,9 +670,15 @@ export function createShadowVisual(shadow: ShadowRecord, sideIndex = shadow.slot
     }
   }
 
-  if (!rootOverride) renderedShadowEntities.push(root)
-  renderedShadowEntities.push(...primitiveEntities)
-  if (avatarEntity) renderedShadowEntities.push(avatarEntity)
+  if (extraEntityCollector) {
+    if (!rootOverride) extraEntityCollector.push(root)
+    extraEntityCollector.push(...primitiveEntities)
+    if (avatarEntity) extraEntityCollector.push(avatarEntity)
+  } else {
+    if (!rootOverride) renderedShadowEntities.push(root)
+    renderedShadowEntities.push(...primitiveEntities)
+    if (avatarEntity) renderedShadowEntities.push(avatarEntity)
+  }
   return { root, position }
 }
 
@@ -690,8 +720,26 @@ export function createPersonalShadowVisual(shadowLevel: number, avatar?: AvatarS
 }
 
 const houseMasterRoots: Entity[] = []
+const houseMasterEntities: Entity[] = []
 
 export function clearHouseMasterVisuals() {
+  for (const root of houseMasterRoots) {
+    shadowMotion.delete(root)
+    shadowImpactByRoot.delete(root)
+    shadowPulseUntil.delete(root)
+  }
+  for (const [id, root] of shadowRootsById) {
+    if (id.startsWith('house-master-')) {
+      shadowRootsById.delete(id)
+      shadowMotion.delete(root)
+      shadowImpactByRoot.delete(root)
+      shadowPulseUntil.delete(root)
+    }
+  }
+  while (houseMasterEntities.length) {
+    const entity = houseMasterEntities.pop()
+    if (entity) engine.removeEntity(entity)
+  }
   while (houseMasterRoots.length) {
     const root = houseMasterRoots.pop()
     if (root) engine.removeEntity(root)
@@ -718,6 +766,7 @@ export function updateHouseMasterVisuals(masters: HouseMasterRecord[]) {
     const pos = podiumPositions[i]
     const root = engine.addEntity()
     houseMasterRoots.push(root)
+    houseMasterEntities.push(root)
     createShadowVisual(
       {
         id: `house-master-${master.playerId}`,
@@ -730,7 +779,8 @@ export function updateHouseMasterVisuals(masters: HouseMasterRecord[]) {
       },
       i,
       pos,
-      root
+      root,
+      houseMasterEntities
     )
   }
 }
@@ -750,21 +800,33 @@ export function clearShadowVisuals() {
   shadowPulseUntil.clear()
 }
 
+let shadowGrewSettleUntilMs = 0
+
 export function animateShadowVisuals(deltaTime: number) {
   const now = Date.now()
+
+  if (shadowGrewSettleUntilMs > 0 && now >= shadowGrewSettleUntilMs) {
+    shadowGrewSettleUntilMs = 0
+    updateUi({ shadowGrewActive: false })
+  }
+
   if (energyFlight) {
     const flight = energyFlight
     const progress = Math.min(1, (now - flight.startedAt) / flight.durationMs)
     const point = energyArcPoint(flight.from, flight.to, progress, ENERGY_ARC_HEIGHT)
-    Transform.getMutable(flight.entity).position = Vector3.create(point.x, point.y, point.z)
-    const orbScale = 1 + Math.sin(progress * Math.PI) * 0.45
-    Transform.getMutable(flight.entity).scale = Vector3.create(orbScale, orbScale, orbScale)
+    if (flight.entity && Transform.has(flight.entity)) {
+      Transform.getMutable(flight.entity).position = Vector3.create(point.x, point.y, point.z)
+      const orbScale = 1 + Math.sin(progress * Math.PI) * 0.45
+      Transform.getMutable(flight.entity).scale = Vector3.create(orbScale, orbScale, orbScale)
+    }
     for (const [index, trail] of flight.trails.entries()) {
       const trailProgress = Math.max(0, progress - (index + 1) * 0.08)
       const trailPoint = energyArcPoint(flight.from, flight.to, trailProgress, ENERGY_ARC_HEIGHT)
       const trailScale = Math.max(0.42, 0.9 - index * 0.13)
-      Transform.getMutable(trail).position = Vector3.create(trailPoint.x, trailPoint.y, trailPoint.z)
-      Transform.getMutable(trail).scale = Vector3.create(trailScale, trailScale, trailScale)
+      if (trail && Transform.has(trail)) {
+        Transform.getMutable(trail).position = Vector3.create(trailPoint.x, trailPoint.y, trailPoint.z)
+        Transform.getMutable(trail).scale = Vector3.create(trailScale, trailScale, trailScale)
+      }
     }
     energyDiagnostics.firstVisibleFrame += 1
     energyDiagnostics.movementUpdates += 1
@@ -775,7 +837,14 @@ export function animateShadowVisuals(deltaTime: number) {
       triggerPersonalShadowReaction(impactScale > 1.2 ? 650 : 580, impactScale)
     }
   }
+
   for (const [root, motion] of shadowMotion) {
+    if (!Transform.has(root)) {
+      shadowMotion.delete(root)
+      shadowImpactByRoot.delete(root)
+      shadowPulseUntil.delete(root)
+      continue
+    }
     const transform = Transform.getMutable(root)
     const pulse = shadowPulseUntil.get(root)
     const impact = shadowImpactByRoot.get(root)
@@ -787,31 +856,25 @@ export function animateShadowVisuals(deltaTime: number) {
       const envelope = progress < 0.28 ? progress / 0.28 : (1 - progress) / 0.72
       const surge = Math.max(0, envelope) * (impact.maxScale - 1)
       transform.scale = Vector3.create(baseScale * (1 + surge), baseScale * (1 + surge), baseScale * (1 + surge))
-      if (personalShadowImpactRing) {
+      if (personalShadowImpactRing && Transform.has(personalShadowImpactRing)) {
         const ringScale = 0.72 + Math.max(0, envelope) * 0.85
         Transform.getMutable(personalShadowImpactRing).scale = Vector3.create(ringScale, 1, ringScale)
       }
-      if (personalShadowImpactGlow) {
+      if (personalShadowImpactGlow && Transform.has(personalShadowImpactGlow)) {
         const glowScale = 0.72 + Math.max(0, envelope) * 0.45
         Transform.getMutable(personalShadowImpactGlow).scale = Vector3.create(glowScale, glowScale, glowScale)
       }
       if (progress >= 1) {
         shadowImpactByRoot.delete(root)
-        if (personalShadowImpactRing) VisibilityComponent.getMutable(personalShadowImpactRing).visible = false
-        if (personalShadowImpactGlow) VisibilityComponent.getMutable(personalShadowImpactGlow).visible = false
+        if (personalShadowImpactRing && VisibilityComponent.has(personalShadowImpactRing)) {
+          VisibilityComponent.getMutable(personalShadowImpactRing).visible = false
+        }
+        if (personalShadowImpactGlow && VisibilityComponent.has(personalShadowImpactGlow)) {
+          VisibilityComponent.getMutable(personalShadowImpactGlow).visible = false
+        }
         if (isPersonal) {
           updateUi({ shadowGrewActive: true })
-          // Settle cue for ~850ms
-          const cueTimeout = 850
-          let timer = 0
-          const settleSystem = (dt: number) => {
-            timer += dt * 1000
-            if (timer >= cueTimeout) {
-              updateUi({ shadowGrewActive: false })
-              engine.removeSystem(settleSystem)
-            }
-          }
-          engine.addSystem(settleSystem)
+          shadowGrewSettleUntilMs = now + 850
         }
       }
     } else {
@@ -819,6 +882,7 @@ export function animateShadowVisuals(deltaTime: number) {
       transform.scale = Vector3.create(baseScale * (1 + pulseStrength), baseScale * (1 + pulseStrength), baseScale * (1 + pulseStrength))
     }
   }
+
   for (const choice of ['A', 'B'] as Choice[]) {
     const active = (choicePadPulseUntil.get(choice) ?? 0) > now
     const flash = (choicePadFlashUntil.get(choice) ?? 0) > now
@@ -826,7 +890,7 @@ export function animateShadowVisuals(deltaTime: number) {
     const flashBoost = flash ? 1.16 : 1
     for (const entity of choicePadEntities[choice]) {
       const base = choicePadBaseScales.get(entity)
-      if (!base) continue
+      if (!base || !Transform.has(entity)) continue
       Transform.getMutable(entity).scale = Vector3.create(base.x * pulse * flashBoost, base.y * (flash ? 1.2 : 1), base.z * pulse * flashBoost)
     }
   }

@@ -1,6 +1,6 @@
 import { AudioSource, AvatarShape, Entity, Material, MeshRenderer, Transform, VisibilityComponent, engine } from '@dcl/sdk/ecs'
 import { Color4, Quaternion, Vector3 } from '@dcl/sdk/math'
-import { AvatarSnapshot, Choice, CURATED_QUESTIONS, ParkState, QUIZ_QUESTIONS, ShadowRecord, personalShadowBaseScale, questionById } from '../shared/state'
+import { AvatarSnapshot, Choice, CURATED_QUESTIONS, HouseMasterRecord, ParkState, QUIZ_QUESTIONS, ShadowRecord, personalShadowBaseScale, questionById } from '../shared/state'
 import { updateUi } from './ui'
 import {
   CHOICE_A_ZONE,
@@ -256,15 +256,6 @@ function createLandscaping() {
   forkPath('A', CHOICE_A_ZONE.centerX)
   forkPath('B', CHOICE_B_ZONE.centerX)
 
-  // A soft landscaping divider breaks the sightline from the Hall back to the
-  // active quiz board without making the secondary space feel walled off.
-  for (const [x, z, canopy] of [
-    [3.55, 9.8, violet], [3.3, 11.3, teal], [3.65, 12.75, violet]
-  ] as Array<[number, number, Color4]>) {
-    cylinder(Vector3.create(x, 0.75, z), Vector3.create(0.24, 1.5, 0.24), Color4.create(0.07, 0.055, 0.11, 1), 0.55, 0.4)
-    sphere(Vector3.create(x, 1.72, z), Vector3.create(0.78, 0.95, 0.78), canopy)
-  }
-
   // Lightweight tree silhouettes add a haunted-garden canopy without heavy
   // assets or dense clutter on the mobile path.
   for (const [x, z, canopy] of [
@@ -314,8 +305,6 @@ function createHouseOfMastersPavilion() {
     const pZ = center.z + 0.4
     const height = i === 1 ? 0.42 : 0.3
     cylinder(Vector3.create(pX, height / 2 + 0.1, pZ), Vector3.create(0.65, height, 0.65), stoneColor, 0.55, 0.5)
-    const crown = sphere(Vector3.create(pX, height + 0.22, pZ), Vector3.create(0.22, 0.22, 0.22), goldTrim)
-    Material.setPbrMaterial(crown, { albedoColor: goldTrim, emissiveColor: goldTrim, emissiveIntensity: 1.2, roughness: 0.4, metallic: 0.6 })
   }
 
   // House of Masters Facade Sign
@@ -700,8 +689,55 @@ export function createPersonalShadowVisual(shadowLevel: number, avatar?: AvatarS
   return visual
 }
 
+const houseMasterRoots: Entity[] = []
+
+export function clearHouseMasterVisuals() {
+  while (houseMasterRoots.length) {
+    const root = houseMasterRoots.pop()
+    if (root) engine.removeEntity(root)
+  }
+}
+
+export function updateHouseMasterVisuals(masters: HouseMasterRecord[]) {
+  clearHouseMasterVisuals()
+  if (!masters || masters.length === 0) return
+  const center = Vector3.create(HOUSE_OF_MASTERS_ZONE.centerX, 0.05, HOUSE_OF_MASTERS_ZONE.centerZ)
+  const podiumPositions = [
+    Vector3.create(center.x, 0.52, center.z + 0.4),
+    Vector3.create(center.x - 1.1, 0.4, center.z + 0.4),
+    Vector3.create(center.x + 1.1, 0.4, center.z + 0.4)
+  ]
+  const topMasters = masters.slice(0, 3)
+  for (let i = 0; i < topMasters.length; i++) {
+    const master = topMasters[i]
+    const hasValidAvatar = Boolean(master.avatar?.bodyShapeUrn || (master.avatar?.wearableUrns && master.avatar.wearableUrns.length > 0))
+    if (!hasValidAvatar) {
+      // Truthfulness: Do NOT render a fake humanoid/spectral mannequin fallback.
+      continue
+    }
+    const pos = podiumPositions[i]
+    const root = engine.addEntity()
+    houseMasterRoots.push(root)
+    createShadowVisual(
+      {
+        id: `house-master-${master.playerId}`,
+        choice: master.choice ?? 'A',
+        slot: i,
+        resonances: master.resonances ?? 0,
+        displayName: master.displayName,
+        shadowLevel: master.shadowLevel ?? 5,
+        avatar: master.avatar
+      },
+      i,
+      pos,
+      root
+    )
+  }
+}
+
 export function clearShadowVisuals() {
   releaseEnergyFlight()
+  clearHouseMasterVisuals()
   while (renderedShadowEntities.length) {
     const entity = renderedShadowEntities.pop()
     if (entity) engine.removeEntity(entity)

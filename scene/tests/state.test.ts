@@ -20,7 +20,8 @@ import {
   QUIZ_QUESTIONS,
   rankForLifetimeCorrect,
   masterStarsForLifetimeCorrect,
-  personalShadowBaseScale
+  personalShadowBaseScale,
+  upsertHouseMaster
 } from '../src/shared/state.ts'
 import { QUESTION_BANK, validateQuestionBank } from '../src/shared/question-bank.ts'
 import { createVoteArmingState, observeChoicePosition } from '../src/client/vote-arming.ts'
@@ -511,5 +512,63 @@ test('10-question sequential integration loop is truthful, distinct, and balance
   }
   assert.ok(maxRun <= 2, `Max same-side run must be <= 2, got ${maxRun}`)
 })
+
+test('upsertHouseMaster adds Master player, updates existing without duplicate, and sorts deterministically', () => {
+  let state = createInitialState()
+  const runA = createRunForPlayer('player-a')
+  runA.lifetimeCorrect = 31
+  runA.shadowScore = 310
+  runA.bestStreak = 8
+  runA.shadowRank = 'MASTER'
+  runA.masteredAt = '2026-09-10T10:00:00.000Z'
+
+  const runB = createRunForPlayer('player-b')
+  runB.lifetimeCorrect = 55
+  runB.shadowScore = 550
+  runB.bestStreak = 20
+  runB.shadowRank = 'MASTER'
+  runB.masteredAt = '2026-09-09T10:00:00.000Z'
+
+  // Insert player B first
+  state.houseMasters = upsertHouseMaster(state, runB, 'player-b')
+  assert.equal(state.houseMasters.length, 1)
+  assert.equal(state.houseMasters[0].playerId, 'player-b')
+  assert.equal(state.houseMasters[0].houseRank, 1)
+
+  // Insert player A
+  state.houseMasters = upsertHouseMaster(state, runA, 'player-a')
+  assert.equal(state.houseMasters.length, 2)
+  // Player B has higher score (550 > 310), so Rank 1 = B, Rank 2 = A
+  assert.equal(state.houseMasters[0].playerId, 'player-b')
+  assert.equal(state.houseMasters[0].houseRank, 1)
+  assert.equal(state.houseMasters[1].playerId, 'player-a')
+  assert.equal(state.houseMasters[1].houseRank, 2)
+
+  // Player A scores more (now 600) and upserts again
+  runA.shadowScore = 600
+  runA.lifetimeCorrect = 60
+  state.houseMasters = upsertHouseMaster(state, runA, 'player-a')
+  assert.equal(state.houseMasters.length, 2, 'Must not duplicate player record')
+  assert.equal(state.houseMasters[0].playerId, 'player-a')
+  assert.equal(state.houseMasters[0].shadowScore, 600)
+  assert.equal(state.houseMasters[0].houseRank, 1)
+  assert.equal(state.houseMasters[1].playerId, 'player-b')
+  assert.equal(state.houseMasters[1].houseRank, 2)
+})
+
+test('upsertHouseMaster qualifies player when lifetimeCorrect >= 30 or score >= 300', () => {
+  let state = createInitialState()
+  const run = createRunForPlayer('player-reconnect')
+  run.lifetimeCorrect = 30
+  run.shadowScore = 300
+  // Even if rank is not explicitly set to MASTER in run object
+  run.shadowRank = 'ECLIPSE' as any
+
+  const masters = upsertHouseMaster(state, run, 'player-reconnect')
+  assert.equal(masters.length, 1)
+  assert.equal(masters[0].playerId, 'player-reconnect')
+  assert.equal(masters[0].shadowRank, 'MASTER')
+})
+
 
 

@@ -16,6 +16,7 @@ import {
   STATE_KEY,
   QUIZ_ID,
   rotateQuestion,
+  upsertHouseMaster,
   utcDateKey
 } from '../shared/state'
 
@@ -340,6 +341,17 @@ export async function setupServer() {
     })
   })
 
+  async function ensurePlayerMasterRegistration(playerId: string, run: PlayerRun, avatar?: AvatarSnapshot) {
+    if (run.shadowRank === 'MASTER' || run.lifetimeCorrect >= 30 || run.shadowScore >= 300) {
+      const nextMasters = upsertHouseMaster(state, run, playerId, new Date(), avatar ?? run.appearanceSnapshot)
+      if (JSON.stringify(nextMasters) !== JSON.stringify(state.houseMasters)) {
+        state = { ...state, houseMasters: nextMasters, shadows: nextMasters, updatedAt: new Date().toISOString() }
+        await Storage.set(STATE_KEY, state)
+        await sendGlobalState()
+      }
+    }
+  }
+
   room.onMessage('requestState', (data, context) => {
     if (!context?.from) return
     const playerId = context.from
@@ -355,6 +367,7 @@ export async function setupServer() {
           lifetimeCorrect: run.lifetimeCorrect,
           questionId: currentQuestionForRun(run)?.questionId ?? ''
         })
+        await ensurePlayerMasterRegistration(playerId, run)
         await sendState(playerId, data.requestId)
         trace('STATE_CHANGED_SENT', { playerId, requestId: data.requestId })
       })

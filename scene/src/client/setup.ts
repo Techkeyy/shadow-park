@@ -25,6 +25,7 @@ import {
   playMomentSound as playPresentationMomentSound,
   shadowPulseUntil,
   shadowRootsById,
+  updateHouseMasterVisuals,
   updateQuestionSurface
 } from './presentation-v2'
 
@@ -370,6 +371,7 @@ function renderState(state: ParkState, timing: StateTiming) {
       }
     })
   }
+  updateHouseMasterVisuals(state.houseMasters ?? [])
   const newest = visibleShadows[visibleShadows.length - 1]
   if (newest && !previousShadowIds.has(newest.id)) {
     const root = shadowRootsById.get(newest.id)
@@ -909,6 +911,7 @@ export function setupClient() {
         totalCompletions: globalState.totalCompletions,
         houseMasters: globalState.houseMasters ?? []
       })
+      updateHouseMasterVisuals(globalState.houseMasters ?? [])
     } catch (error) {
       console.error('SHADOW PARK received invalid global state', error)
     }

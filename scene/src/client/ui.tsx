@@ -159,19 +159,35 @@ function progressionHud() {
       uiTransform={{
         positionType: 'absolute',
         position: { top: '3%', left: '4%' },
-        padding: '5px 9px',
+        padding: '7px 11px',
         borderRadius: 8,
         flexDirection: 'column',
         alignItems: 'flex-start'
       }}
       uiBackground={{ color: Color4.create(0.015, 0.02, 0.06, 0.5) }}
     >
-      <Label value={`SHADOW SCORE ${uiState.shadowScore}`} color={paleText} fontSize={16} />
-      <Label value={`CHAIN ${uiState.currentStreak}`} color={uiState.currentStreak >= 5 ? warmText : shadowBlue} fontSize={14} />
-      <Label value={uiState.shadowRank} color={shadowPurple} fontSize={14} />
-      {uiState.shadowGrewActive && <Label value="✦ +SHADOW POWER" color={warmText} fontSize={12} />}
-      <Label value={progressLine} color={mutedText} fontSize={11} />
-      {uiState.bestStreak > 0 && <Label value={`BEST CHAIN ${uiState.bestStreak}`} color={mutedText} fontSize={11} />}
+      <UiEntity uiTransform={{ margin: { bottom: 3 } }}>
+        <Label value={`SHADOW SCORE ${uiState.shadowScore}`} color={paleText} fontSize={16} />
+      </UiEntity>
+      <UiEntity uiTransform={{ margin: { bottom: 3 } }}>
+        <Label value={`CHAIN ${uiState.currentStreak}`} color={uiState.currentStreak >= 5 ? warmText : shadowBlue} fontSize={14} />
+      </UiEntity>
+      <UiEntity uiTransform={{ margin: { bottom: 3 } }}>
+        <Label value={uiState.shadowRank} color={shadowPurple} fontSize={14} />
+      </UiEntity>
+      {uiState.shadowGrewActive && (
+        <UiEntity uiTransform={{ margin: { bottom: 3 } }}>
+          <Label value="✦ +SHADOW POWER" color={warmText} fontSize={12} />
+        </UiEntity>
+      )}
+      <UiEntity uiTransform={{ margin: { bottom: 3 } }}>
+        <Label value={progressLine} color={mutedText} fontSize={11} />
+      </UiEntity>
+      {uiState.bestStreak > 0 && (
+        <UiEntity uiTransform={{ margin: { top: 1 } }}>
+          <Label value={`BEST CHAIN ${uiState.bestStreak}`} color={mutedText} fontSize={11} />
+        </UiEntity>
+      )}
     </UiEntity>
   )
 }

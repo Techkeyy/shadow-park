@@ -427,29 +427,30 @@ export function createClientState(state: ParkState, run: PlayerRun): ParkState {
   return { ...state, version: 3, questionId: question.questionId, question: question.questionText, choiceA: question.answerA, choiceB: question.answerB, run }
 }
 
-function upsertHouseMaster(state: ParkState, run: PlayerRun, playerId: string, now: Date, avatar?: AvatarSnapshot): HouseMasterRecord[] {
-  if (run.shadowRank !== 'MASTER') return state.houseMasters ?? []
+export function upsertHouseMaster(state: ParkState, run: PlayerRun, playerId: string, now = new Date(), avatar?: AvatarSnapshot): HouseMasterRecord[] {
+  if (run.shadowRank !== 'MASTER' && run.lifetimeCorrect < 30 && run.shadowScore < 300) return state.houseMasters ?? []
   const existing = (state.houseMasters ?? []).filter((record) => record.playerId !== playerId)
+  const existingRecord = (state.houseMasters ?? []).find((record) => record.playerId === playerId)
   const record: HouseMasterRecord = {
     id: `master-${playerId}`,
     playerId,
-    displayName: avatar?.displayName ?? run.appearanceSnapshot?.displayName,
-    avatar: avatar ?? run.appearanceSnapshot,
-    choice: run.lastChoice ?? 'A',
+    displayName: avatar?.displayName ?? run.appearanceSnapshot?.displayName ?? existingRecord?.displayName ?? playerId.slice(0, 8),
+    avatar: avatar ?? run.appearanceSnapshot ?? existingRecord?.avatar,
+    choice: run.lastChoice ?? existingRecord?.choice ?? 'A',
     slot: 0,
-    resonances: 0,
+    resonances: existingRecord?.resonances ?? 0,
     score: run.shadowScore,
     shadowScore: run.shadowScore,
     lifetimeCorrect: run.lifetimeCorrect,
-    bestStreak: run.bestStreak,
+    bestStreak: Math.max(run.bestStreak, existingRecord?.bestStreak ?? 0),
     shadowRank: 'MASTER',
     masterStars: run.masterStars,
     shadowLevel: run.shadowLevel,
-    masteredAt: run.masteredAt,
+    masteredAt: run.masteredAt ?? existingRecord?.masteredAt ?? now.toISOString(),
     updatedAt: now.toISOString()
   }
   return [...existing, record]
-    .sort((left, right) => (right.shadowScore - left.shadowScore) || (right.bestStreak - left.bestStreak) || String(left.masteredAt ?? '').localeCompare(String(right.masteredAt ?? '')))
+    .sort((left, right) => (right.shadowScore - left.shadowScore) || (right.bestStreak - left.bestStreak) || String(left.masteredAt ?? '').localeCompare(String(right.masteredAt ?? '')) || left.playerId.localeCompare(right.playerId))
     .slice(0, MAX_PERSISTED_HOUSE_MASTERS)
     .map((entry, index) => ({ ...entry, slot: index, houseRank: index + 1 }))
 }

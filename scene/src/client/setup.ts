@@ -656,6 +656,7 @@ function completeAnswerTransition(result: {
   houseRank: number
   previousRank: string
   rankChanged: boolean
+  lifetimeCorrect?: number
 }) {
   const questionId = result.questionId || lastAttemptedQuestionId || parkState?.run?.lastAnswer?.questionId || ''
   if (!result.accepted) {
@@ -728,6 +729,7 @@ function completeAnswerTransition(result: {
         masterStarAwarded: result.masterStarAwarded,
         houseRank: result.houseRank,
         shadowLevel: result.shadowLevel,
+        lifetimeCorrect: result.lifetimeCorrect ?? Math.floor((result.shadowScore ?? result.score) / 10),
         answerFeedback: result.message,
         correctAnswer: result.correctAnswer,
         nextQuestionId: result.nextQuestionId,

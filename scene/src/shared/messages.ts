@@ -60,7 +60,8 @@ export const ShadowParkMessages = {
     shadowAwakened: Schemas.Boolean,
     becameMaster: Schemas.Boolean,
     masterStarAwarded: Schemas.Boolean,
-    houseRank: Schemas.Number
+    houseRank: Schemas.Number,
+    lifetimeCorrect: Schemas.Optional(Schemas.Number)
   }),
   nextQuestionReady: Schemas.Map({ accepted: Schemas.Boolean, questionId: Schemas.String }),
   restartResult: Schemas.Map({ accepted: Schemas.Boolean, message: Schemas.String }),

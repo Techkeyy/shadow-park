@@ -111,6 +111,7 @@ function answerResultPayload(run: PlayerRun, fields: Record<string, unknown> = {
     becameMaster: false,
     masterStarAwarded: false,
     houseRank: run.houseRank ?? 0,
+    lifetimeCorrect: run.lifetimeCorrect,
     ...fields
   }
 }

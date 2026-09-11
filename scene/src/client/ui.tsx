@@ -129,7 +129,8 @@ function resultCopy() {
   const headline = uiState.becameMaster ? 'MASTER' : correct ? 'CORRECT' : 'WRONG'
   const scoreDelta = correct ? `+${10 + uiState.milestoneBonus} SHADOW SCORE` : '+0 SHADOW SCORE'
   const chainLine = correct ? `SHADOW FED • CHAIN ${uiState.currentStreak}` : uiState.chainLost ? 'CHAIN LOST' : ''
-  const rankProgress = rankProgressForCorrectCount(uiState.lifetimeCorrect)
+  const authoritativeCorrect = Math.max(uiState.lifetimeCorrect, Math.floor(uiState.shadowScore / 10))
+  const rankProgress = rankProgressForCorrectCount(authoritativeCorrect)
   const progressLine = rankProgress.nextRank ? `${rankProgress.current} / ${rankProgress.target} TO ${rankProgress.nextRank}` : 'MASTER • KEEP FEEDING'
   return (
     <UiEntity uiTransform={{ flexDirection: 'column', alignItems: 'center', margin: '8px 0 0', padding: '8px 12px' }}>
@@ -150,7 +151,8 @@ function resultCopy() {
 
 function progressionHud() {
   if (!uiState.hydrated) return null
-  const rankProgress = rankProgressForCorrectCount(uiState.lifetimeCorrect)
+  const authoritativeCorrect = Math.max(uiState.lifetimeCorrect, Math.floor(uiState.shadowScore / 10))
+  const rankProgress = rankProgressForCorrectCount(authoritativeCorrect)
   const progressLine = rankProgress.nextRank ? `${rankProgress.current} / ${rankProgress.target} TO ${rankProgress.nextRank}` : 'MASTER • KEEP FEEDING'
   return (
     <UiEntity
@@ -225,26 +227,32 @@ function helperPanel() {
 function houseOfMastersPanel() {
   if (!uiState.housePanelVisible) return null
   const masters = (uiState.houseMasters || []).slice(0, 20)
+  const topScore = masters.length > 0 ? Math.max(...masters.map(m => m.shadowScore)) : 0
   return (
     <UiEntity
       uiTransform={{
         positionType: 'absolute',
-        position: { top: '12%', left: '16%' },
-        width: '68%',
+        position: { top: '10%', left: '14%' },
+        width: '72%',
         padding: '14px 18px',
         borderRadius: 12,
         flexDirection: 'column',
         alignItems: 'center'
       }}
-      uiBackground={{ color: Color4.create(0.04, 0.02, 0.09, 0.92) }}
+      uiBackground={{ color: Color4.create(0.04, 0.02, 0.09, 0.94) }}
     >
-      <Label value="HOUSE OF MASTERS" color={shadowPurple} fontSize={20} textAlign="middle-center" />
-      <Label value="THE SHADOWS REMEMBER" color={mutedText} fontSize={12} textAlign="middle-center" />
+      <Label value="HOUSE OF MASTERS" color={shadowPurple} fontSize={21} textAlign="middle-center" />
+      <Label value="THE STRONGEST SHADOWS REMAIN" color={shadowBlue} fontSize={13} textAlign="middle-center" />
+      <Label value="REACH 300. TAKE YOUR PLACE." color={warmText} fontSize={12} textAlign="middle-center" />
+      {masters.length > 0 && (
+        <Label value={`MASTERS: ${masters.length}  •  TOP SCORE: ${topScore}`} color={paleText} fontSize={11} textAlign="middle-center" />
+      )}
       
       {masters.length === 0 ? (
         <UiEntity uiTransform={{ flexDirection: 'column', alignItems: 'center', margin: '16px 0' }}>
-          <Label value="NO MASTERS YET. BE THE FIRST." color={warmText} fontSize={15} textAlign="middle-center" />
-          <Label value="Reach 30 correct answers to etch your name in the House." color={paleText} fontSize={12} textAlign="middle-center" />
+          <Label value="NO MASTERS YET." color={warmText} fontSize={16} textAlign="middle-center" />
+          <Label value="BE THE FIRST." color={warmText} fontSize={14} textAlign="middle-center" />
+          <Label value="Reach 300 Shadow Score (30 correct) to etch your name in the House." color={paleText} fontSize={12} textAlign="middle-center" />
         </UiEntity>
       ) : (
         <UiEntity uiTransform={{ flexDirection: 'column', width: '100%', margin: '10px 0 0' }}>
